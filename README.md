@@ -70,7 +70,7 @@ Capture and analyse a complete TCP connection lifecycle to understand baseline n
 - Packet filtering
 - Stream following
 - Network troubleshooting
-
+<!--
 ### 🔧 Wireshark Filters
 ```bash
 tcp.flags.syn == 1
@@ -91,7 +91,7 @@ tcp.stream eq 0
 * `screenshots/`
 
 ---
-
+-->
 ## 02 - DNS Traffic Investigation
 
 ### 🎯 Scenario
@@ -118,7 +118,7 @@ Investigate DNS queries and responses to understand domain resolution and identi
 * IOC identification
 * Suspicious domain detection
 * Traffic visibility
-
+<!--
 ### 🔧 Wireshark Filters
 
 ```bash
@@ -135,7 +135,7 @@ dns.flags.response == 1
 * `notes/dns-analysis.md`
 
 ---
-
+-->
 ## 03 - Cleartext Credential Capture
 
 ### 🎯 Scenario
@@ -155,7 +155,7 @@ Demonstrate the risks of insecure protocols by capturing credentials transmitted
 * FTP traffic analysis
 * Credential exposure investigation
 * Stream reconstruction
-
+<!--
 ### 🔧 Wireshark Filters
 
 ```bash
@@ -172,7 +172,7 @@ ftp.request.command == "PASS"
 * `captures/ftp-session.pcap`
 
 ---
-
+-->
 ## 04 - Nmap Scan Detection & Analysis
 
 ### 🎯 Scenario
@@ -196,7 +196,7 @@ Detect and classify various Nmap scan techniques through packet analysis.
 * Scan classification
 * TCP flag analysis
 * Network reconnaissance detection
-
+<!--
 ### 🔧 Wireshark Filters
 
 ```bash
@@ -213,7 +213,7 @@ icmp
 * `notes/scan-analysis.md`
 
 ---
-
+-->
 ## 05 - ARP Spoofing / MITM Detection
 
 ### 🎯 Scenario
@@ -233,7 +233,7 @@ Simulate ARP poisoning and identify MITM indicators in packet captures.
 * MITM detection
 * ARP investigation
 * IOC identification
-
+<!--
 ### 🔧 Wireshark Filters
 
 ```bash
@@ -250,7 +250,7 @@ arp.opcode == 2
 * `notes/arp-analysis.md`
 
 ---
-
+-->
 ## 06 - Malware PCAP Investigation
 
 ### 🎯 Scenario
@@ -274,14 +274,14 @@ Investigate malware traffic captures to identify command-and-control communicati
 * IOC extraction
 * C2 detection
 * Threat hunting fundamentals
-
+<!--
 ### 📁 Files
 
 * `captures/malware-sample.pcap`
 * `reports/malware-analysis.md`
 
 ---
-
+-->
 ## 07 - SSH Brute Force Detection
 
 ### 🎯 Scenario
@@ -300,7 +300,7 @@ Capture and investigate repeated SSH authentication attempts.
 * Brute force detection
 * Traffic analysis
 * Incident investigation
-
+<!--
 ### 🔧 Wireshark Filters
 
 ```bash
@@ -313,7 +313,7 @@ tcp.port == 22
 * `notes/bruteforce-analysis.md`
 
 ---
-
+-->
 ## 08 - Rogue DHCP Server Detection
 
 ### 🎯 Scenario
