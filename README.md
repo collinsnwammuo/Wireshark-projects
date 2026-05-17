@@ -89,9 +89,9 @@ tcp.stream eq 0
 * `captures/tcp-handshake.pcap`
 * `notes/tcp-analysis.md`
 * `screenshots/`
-
----
 -->
+---
+
 ## 02 - DNS Traffic Investigation
 
 ### 🎯 Scenario
@@ -133,9 +133,9 @@ dns.flags.response == 1
 
 * `captures/dns-analysis.pcap`
 * `notes/dns-analysis.md`
-
----
 -->
+---
+
 ## 03 - Cleartext Credential Capture
 
 ### 🎯 Scenario
@@ -170,9 +170,9 @@ ftp.request.command == "PASS"
 
 * `captures/http-login.pcap`
 * `captures/ftp-session.pcap`
-
----
 -->
+---
+
 ## 04 - Nmap Scan Detection & Analysis
 
 ### 🎯 Scenario
@@ -211,9 +211,9 @@ icmp
 
 * `captures/nmap-scan.pcap`
 * `notes/scan-analysis.md`
-
----
 -->
+---
+
 ## 05 - ARP Spoofing / MITM Detection
 
 ### 🎯 Scenario
@@ -248,9 +248,9 @@ arp.opcode == 2
 
 * `captures/arp-spoofing.pcap`
 * `notes/arp-analysis.md`
-
----
 -->
+---
+
 ## 06 - Malware PCAP Investigation
 
 ### 🎯 Scenario
@@ -279,9 +279,9 @@ Investigate malware traffic captures to identify command-and-control communicati
 
 * `captures/malware-sample.pcap`
 * `reports/malware-analysis.md`
-
----
 -->
+---
+
 ## 07 - SSH Brute Force Detection
 
 ### 🎯 Scenario
@@ -311,9 +311,9 @@ tcp.port == 22
 
 * `captures/ssh-bruteforce.pcap`
 * `notes/bruteforce-analysis.md`
-
----
 -->
+---
+
 ## 08 - Rogue DHCP Server Detection
 
 ### 🎯 Scenario
@@ -341,9 +341,9 @@ bootp
 ### 📁 Files
 
 * `captures/rogue-dhcp.pcap`
-
----
 -->
+---
+
 ## 09 - ICMP Tunnel Detection
 
 ### 🎯 Scenario
@@ -361,7 +361,7 @@ Investigate suspicious ICMP traffic potentially used for covert communication or
 * Covert channel detection
 * ICMP analysis
 * Threat hunting
-
+<!--
 ### 🔧 Wireshark Filters
 
 ```bash
@@ -371,7 +371,7 @@ icmp
 ### 📁 Files
 
 * `captures/icmp-tunnel.pcap`
-
+-->
 ---
 
 ## 10 - Full PCAP Forensics Investigation
@@ -397,12 +397,12 @@ Reconstruct a multi-stage cyber attack using only packet capture analysis.
 * Incident reconstruction
 * IOC extraction
 * Analyst reporting
-
+<!--
 ### 📁 Files
 
 * `captures/full-attack-chain.pcap`
 * `reports/forensics-report.md`
-
+-->
 ---
 
 # 🖥️ Lab Environment
@@ -410,13 +410,12 @@ Reconstruct a multi-stage cyber attack using only packet capture analysis.
 ```text
 VirtualBox Host Machine
 ├── Kali Linux VM
-├── Ubuntu Server VM
 ├── Windows Client VM
 └── Isolated Host-Only Network
 ```
 
 ---
-
+<!--
 # 📂 Repository Structure
 
 ```text
@@ -428,7 +427,7 @@ wireshark-network-analysis/
 ├── reports/
 └── iocs/
 ```
-
+-->
 ---
 
 # 🧠 Skills Demonstrated
@@ -453,7 +452,7 @@ wireshark-network-analysis/
 * tshark
 
 ---
-
+<!--
 # 📚 Resources Used
 
 * Wireshark Documentation
@@ -461,7 +460,7 @@ wireshark-network-analysis/
 * CyberDefenders
 * TryHackMe
 * MITRE ATT&CK Framework
-
+-->
 ---
 
 # 📜 Disclaimer
