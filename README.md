@@ -49,7 +49,7 @@ All captures were performed in isolated lab environments using VirtualBox and co
 
 ---
 
-## 01 - TCP Handshake & Session Analysis 👉 
+## 01 - TCP Handshake & Session Analysis 
 <!--[Open](https://github.com/collinsnwammuo/Cisco-Packet-Tracer-Projects/tree/main/VLAN%20Segmentation%20and%20Inter-VLAN%20Routing)-->
 
 ### 🎯 Scenario
