@@ -1,4 +1,4 @@
-````markdown
+
 # 🦈 Wireshark Network Analysis Portfolio
 
 > Hands-on packet capture and network traffic analysis projects built in a home lab environment using Wireshark and VirtualBox.
