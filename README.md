@@ -32,7 +32,7 @@ All captures were performed in isolated lab environments using VirtualBox and co
 
 | # | Project | Protocols | Difficulty | Status |
 |---|---------|-----------|------------|--------|
-| 01 | [TCP Handshake & Session Analysis](#01---tcp-handshake--session-analysis) | TCP | Beginner | ✅ Complete |
+| 01 | [TCP Handshake & Session Analysis](#1️⃣-tcp-handshake--session-analysis) | TCP | Beginner | ✅ Complete |
 | 02 | [DNS Traffic Investigation](#02---dns-traffic-investigation) | DNS, UDP | Beginner | ✅ Complete |
 | 03 | [Cleartext Credential Capture](#03---cleartext-credential-capture) | HTTP, FTP | Beginner | ✅ Complete |
 | 04 | [Nmap Scan Detection & Analysis](#04---nmap-scan-detection--analysis) | TCP, ICMP | Intermediate | ✅ Complete |
@@ -49,8 +49,7 @@ All captures were performed in isolated lab environments using VirtualBox and co
 
 ---
 
-## 01 - TCP Handshake & Session Analysis
-[→ Open Project Folder](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/TCP%20Handshake)
+## 1️⃣ TCP Handshake & Session Analysis 👉 [Open](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/TCP%20Handshake)
 
 ### 🎯 Scenario
 Capture and analyse a complete TCP connection lifecycle to understand baseline network communication and session behavior.
