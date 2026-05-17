@@ -331,7 +331,7 @@ Detect unauthorized DHCP activity within a LAN environment.
 * DHCP analysis
 * Rogue device detection
 * Infrastructure monitoring
-
+<!--
 ### 🔧 Wireshark Filters
 
 ```bash
@@ -343,7 +343,7 @@ bootp
 * `captures/rogue-dhcp.pcap`
 
 ---
-
+-->
 ## 09 - ICMP Tunnel Detection
 
 ### 🎯 Scenario
