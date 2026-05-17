@@ -49,7 +49,8 @@ All captures were performed in isolated lab environments using VirtualBox and co
 
 ---
 
-## 01 - [TCP Handshake & Session Analysis] [Open](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/TCP%20Handshake)
+## 01 - TCP Handshake & Session Analysis
+[→ Open Project Folder](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/TCP%20Handshake)
 
 ### 🎯 Scenario
 Capture and analyse a complete TCP connection lifecycle to understand baseline network communication and session behavior.
