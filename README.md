@@ -39,7 +39,7 @@ All captures were performed in isolated lab environments using VirtualBox and co
 | 05 | [ARP Spoofing / MITM Detection](#05---arp-spoofing--mitm-detection) | ARP | Intermediate | 🔄 In Progress |
 | 06 | [Malware PCAP Investigation](#06---malware-pcap-investigation) | HTTP, TCP | Intermediate | 🔄 In Progress |
 | 07 | [SSH Brute Force Detection](#07---ssh-brute-force-detection) | SSH, TCP | Intermediate | 🔄 In Progress |
-| 08 | [Rogue DHCP Server Detection](#08---rogue-dhcp-server-detection) | DHCP, UDP | ⏳ Planned |
+| 08 | [Rogue DHCP Server Detection](#08---rogue-dhcp-server-detection) | DHCP, UDP | Advanced | ⏳ Planned |
 | 09 | [ICMP Tunnel Detection](#09---icmp-tunnel-detection) | ICMP | Advanced | ⏳ Planned |
 | 10 | [Full PCAP Forensics Investigation](#10---full-pcap-forensics-investigation) | Multi | Advanced | ⏳ Planned |
 
