@@ -64,8 +64,8 @@ A critical difference observed in this lab: Windows 10 sends **RST for all ports
 
 ```
 VirtualBox Host-Only Network: 192.168.56.0/24
-├── Kali Linux   192.168.56.101  — attacker + Wireshark analyst
-└── Windows 10   192.168.56.102  — target (RDP, SMB, HTTP enabled)
+├── Kali Linux   192.168.56.102  — attacker + Wireshark analyst
+└── Windows 10   192.168.56.101  — target (RDP, SMB, RPC)
 ```
 
 > Update IP addresses to match your actual lab.
@@ -76,18 +76,17 @@ VirtualBox Host-Only Network: 192.168.56.0/24
 |---|---|---|
 | Remote Desktop (RDP) | 3389 | System Properties → Remote Settings |
 | SMB File Sharing | 139, 445 | Network and Sharing Centre |
-| HTTP (Apache/XAMPP) | 80 | XAMPP Control Panel |
 | Windows RPC | 135 | Default — always on |
 
 ### Scan Commands
 
 ```bash
-sudo nmap -sS 192.168.56.102                     # SYN stealth scan
-nmap -sT 192.168.56.102                          # TCP connect scan
-sudo nmap -sU --top-ports 20 192.168.56.102      # UDP scan
-sudo nmap -sV -O -A 192.168.56.102               # Version + OS detection
-sudo nmap -sX 192.168.56.102                     # XMAS scan
-sudo nmap -sN 192.168.56.102                     # NULL scan
+sudo nmap -sS 192.168.56.101                     # SYN stealth scan
+nmap -sT 192.168.56.101                          # TCP connect scan
+sudo nmap -sU --top-ports 20 192.168.56.101     # UDP scan
+sudo nmap -sV -O -A 192.168.56.101               # Version + OS detection
+sudo nmap -sX 192.168.56.101                     # XMAS scan
+sudo nmap -sN 192.168.56.101                    # NULL scan
 ```
 
 Each scan was captured separately — one `.pcap` file per scan type.
@@ -98,7 +97,6 @@ Each scan was captured separately — one `.pcap` file per scan type.
 tcp.flags.syn == 1 && tcp.flags.ack == 0         # SYN packets only
 tcp.flags.syn == 1 && tcp.flags.ack == 1         # SYN-ACK (open port replies)
 tcp.flags.reset == 1                              # RST packets
-tcp.flags.fin == 1 && tcp.flags.push == 1 && tcp.flags.urg == 1   # XMAS packets
 tcp.flags == 0x000                                # NULL packets
 icmp.type == 3 && icmp.code == 3                 # ICMP Port Unreachable (UDP scan)
 udp                                               # All UDP traffic
@@ -112,13 +110,10 @@ udp                                               # All UDP traffic
 
 | Port | Protocol | Service | Scan That Found It |
 |---|---|---|---|
-| 80 | TCP | HTTP (Apache/XAMPP) | SYN, Connect, Version |
 | 135 | TCP | Windows RPC | SYN, Connect, Version |
 | 139 | TCP | NetBIOS | SYN, Connect, Version |
 | 445 | TCP | SMB | SYN, Connect, Version |
 | 3389 | TCP | RDP | SYN, Connect, Version |
-
-> Update with your actual open ports.
 
 ### Scan Comparison Table
 
@@ -128,7 +123,6 @@ udp                                               # All UDP traffic
 | TCP Connect | `-sT` | SYN→SYN-ACK→ACK→FIN | SYN→RST-ACK | Standard | High |
 | UDP | `-sU` | Silence / service reply | ICMP Port Unreachable | Rate-limited ICMP | Low |
 | Version | `-sV -O` | Full connect + data | SYN→RST-ACK | Standard | Very High |
-| XMAS | `-sX` | **RST (not silence)** | RST | RSTs all — unreliable | Low |
 | NULL | `-sN` | **RST (not silence)** | RST | RSTs all — unreliable | Low |
 
 ---
@@ -179,17 +173,6 @@ The `-A` flag triggered the most traffic of any scan — full connections to all
 ```
 OS details: Microsoft Windows 10
 ```
-
----
-
-### XMAS & NULL Scans — Windows Behaviour Note
-
-**XMAS filter:** `tcp.flags.fin == 1 && tcp.flags.push == 1 && tcp.flags.urg == 1`  
-**NULL filter:** `tcp.flags == 0x000`
-
-Both scan types were clearly identifiable in Wireshark — the illegal flag combinations (all three flags set for XMAS, no flags for NULL) have no equivalent in legitimate traffic. However, Windows 10 sent RST responses to **all** ports regardless of state, rendering these scans unable to distinguish open from closed ports on this target. This is expected Windows behaviour and differs from Linux targets which follow RFC 793 strictly.
-
-**SOC implication:** Even though these scans fail against Windows, a single XMAS or NULL packet in any production capture is an immediate red flag — no legitimate application ever generates these flag combinations.
 
 ---
 
