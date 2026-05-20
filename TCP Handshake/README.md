@@ -67,10 +67,10 @@ tcp.stream eq 0                              # Isolate a single TCP conversation
 
 | Field | Value |
 |---|---|
-| Client IP | `192.168.x.x` (Kali VM) |
-| Server IP | `93.184.216.34` (example.com) |
+| Client IP | `10.0.x.x` (Kali VM) |
+| Server IP | `104.20.23.154` (example.com) |
 | Destination Port | `80` (HTTP) |
-| Client Source Port | (ephemeral, e.g. 52341) |
+| Client Source Port | `52300`) |
 | Protocol | TCP over IPv4 |
 
 ### 3-Way Handshake — Packet Breakdown
