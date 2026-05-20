@@ -18,12 +18,12 @@ DNS translates human-readable domain names into IP addresses. Every time a devic
 
 ```
 Client                    DNS Resolver              Authoritative NS
-  |                            |                          |
-  |---[Query: google.com?]---->|                          |
-  |                            |---[Query: google.com?]-->|
-  |                            |<--[Answer: 142.251.142.142]--|
-  |<--[Answer: 142.250.x.x]----|                          |
-  |                            |                          |
+  |                              |                          |
+  |---[Query: google.com?]---->  |                          |
+  |                              |---[Query: google.com?]-->|
+  |                              |<--[Ans: 142.251.142.142]-|
+  |<--[Answer: 142.251.142.142]--|                          |
+  |                              |                          |
 ```
 
 **Why DNS matters to a SOC analyst:**
