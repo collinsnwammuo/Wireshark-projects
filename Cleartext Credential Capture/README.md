@@ -20,19 +20,19 @@ All traffic captured in this project was generated in a fully isolated VirtualBo
 
 ## 🧠 Background
 
-Many legacy protocols transmit data — including usernames and passwords — in **plaintext**, meaning anyone on the same network with a packet capture tool can read them directly.
+Many legacy protocols transmit data including usernames and passwords in **plaintext**, meaning anyone on the same network with a packet capture tool can read them directly.
 
 ```
 HTTP Login (CLEARTEXT):
 Client → Server:
   POST /login HTTP/1.1
-  Host: 192.168.1.x
-  Content: username=admin&password=hunter2    ← VISIBLE TO ANYONE
+  Host: 127.0.0.1
+  Content: username=testuser&password=hunter2    ← VISIBLE TO ANYONE
 
 FTP Login (CLEARTEXT):
 Client → Server:  USER ftpuser               ← VISIBLE
 Server → Client:  331 Password required
-Client → Server:  PASS ftppass123            ← VISIBLE
+Client → Server:  PASS ftpkali               ← VISIBLE
 Server → Client:  230 Login successful
 
 HTTPS Login (ENCRYPTED):
@@ -106,7 +106,7 @@ ftp-data                               # FTP data channel (file transfers)
 
 ### Part C — HTTPS Comparison
 
-Captured HTTPS traffic to the same type of site for direct comparison — showing what encrypted traffic looks like versus cleartext.
+Captured HTTPS traffic to the same type of site for direct comparison, showing what encrypted traffic looks like versus cleartext.
 
 ```wireshark
 tls                                    # TLS/HTTPS traffic
@@ -138,7 +138,7 @@ username=testuser&password=hunter2
 | Packet | Content Visible |
 |---|---|
 | USER command | `USER ftpuser` — username in plaintext |
-| PASS command | `PASS ftppass123` — password in plaintext |
+| PASS command | `PASS ftpkali` — password in plaintext |
 | Server response | `230 Login successful` |
 | Session | All commands (ls, pwd, quit) fully readable |
 
@@ -150,21 +150,6 @@ username=testuser&password=hunter2
 | Content readable | ✅ Yes | ❌ No |
 | Attack difficulty | Trivial | Requires key/cert compromise |
 | Wireshark payload | Username & password | `Application Data` (ciphertext) |
-
----
-
-## 📸 Screenshots
-
-| Screenshot | Description |
-|---|---|
-| `screenshots/01-http-post-filter.png` | Wireshark with POST filter — login packet visible in list |
-| `screenshots/02-http-credentials-exposed.png` | Middle pane expanded — username and password in plaintext |
-| `screenshots/03-http-stream.png` | Follow HTTP Stream — full POST request with credentials |
-| `screenshots/04-ftp-filter.png` | Wireshark with `ftp` filter — USER and PASS packets visible |
-| `screenshots/05-ftp-user-packet.png` | FTP USER packet — username visible in packet details |
-| `screenshots/06-ftp-pass-packet.png` | FTP PASS packet — password visible in packet details |
-| `screenshots/07-ftp-stream.png` | Follow TCP Stream on FTP — full session with credentials |
-| `screenshots/08-https-encrypted.png` | TLS traffic — Application Data, nothing readable |
 
 ---
 
