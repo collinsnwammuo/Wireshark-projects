@@ -2,26 +2,26 @@
 
 **Difficulty:** Intermediate  
 **Protocols:** TCP, UDP, ICMP  
-**Tool:** Wireshark · Nmap  
-**Lab Environment:** Kali Linux (attacker) · Metasploitable2 (target) · VirtualBox Host-Only Network
+**Tools:** Wireshark · Nmap  
+**Lab Environment:** Kali Linux (attacker/analyst) · Windows 10 (target) · VirtualBox Host-Only Network
 
 ---
 
 ## 🎯 Objective
 
-Run six different Nmap scan types against a vulnerable target VM and analyse the resulting packet captures in Wireshark — identifying the unique traffic signature of each scan type. This is a core SOC skill: recognising reconnaissance activity from network traffic before an attacker moves to exploitation.
+Run six different Nmap scan types from Kali Linux against a Windows 10 target VM and analyse each resulting packet capture in Wireshark — identifying the unique traffic signature of every scan type. A key finding in this project is how Windows 10 responds differently to certain scan types compared to Linux targets, which has direct implications for SOC detection strategies.
 
 ---
 
 ## ⚠️ Disclaimer
 
-All scans were performed in a fully isolated VirtualBox lab (Host-Only network). The target is a Metasploitable2 VM — a deliberately vulnerable machine built for security training. No external or production systems were scanned.
+All scanning was performed in a fully isolated VirtualBox Host-Only network. The target is a Windows 10 VM running in a closed lab environment. No external or production systems were involved.
 
 ---
 
 ## 🧠 Background
 
-Port scanning is almost always the first stage of an attack — the attacker maps which hosts are alive, which ports are open, and what services are running before choosing an exploit. As a SOC analyst, being able to recognise scan traffic in a PCAP or SIEM alert is fundamental.
+Port scanning is almost always the first stage of an attack — the adversary maps which hosts are alive, which ports are open, and what services are running before choosing an exploit. Recognising scan signatures in network traffic is a foundational SOC analyst skill.
 
 ```
 Attack Kill Chain:
@@ -30,32 +30,31 @@ Attack Kill Chain:
   THIS PROJECT
 ```
 
-**Nmap scan types and their core logic:**
+### TCP Scan Logic
 
 ```
-SYN Scan (-sS):      Client sends SYN only. Never completes handshake.
-                     Open:    SYN → SYN-ACK → RST  (Nmap kills it)
-                     Closed:  SYN → RST-ACK
+SYN Scan (-sS):
+  Open port:    SYN ──► SYN-ACK ──► RST   (Nmap kills connection — "stealth")
+  Closed port:  SYN ──► RST-ACK
 
-Connect Scan (-sT):  Full TCP handshake per port.
-                     Open:    SYN → SYN-ACK → ACK → FIN
-                     Closed:  SYN → RST-ACK
+Connect Scan (-sT):
+  Open port:    SYN ──► SYN-ACK ──► ACK ──► FIN  (full handshake)
+  Closed port:  SYN ──► RST-ACK
 
-UDP Scan (-sU):      Sends UDP probe to each port.
-                     Open:    No response (or service reply)
-                     Closed:  ICMP Port Unreachable (type 3 code 3)
+UDP Scan (-sU):
+  Open port:    UDP probe ──► [silence or service reply]
+  Closed port:  UDP probe ──► ICMP Port Unreachable (type 3, code 3)
 
-XMAS Scan (-sX):     Sets FIN + PSH + URG flags (illegal combo).
-                     Open:    No response
-                     Closed:  RST
+XMAS Scan (-sX):   Sets FIN + PSH + URG flags (illegal TCP combination)
+NULL Scan (-sN):   No TCP flags set at all (illegal TCP combination)
 
-NULL Scan (-sN):     No TCP flags set at all (illegal).
-                     Open:    No response
-                     Closed:  RST
-
-Version Scan (-sV):  Full connect + banner grab per open port.
-                     Nmap reads service responses to fingerprint versions.
+Version Scan (-sV -O -A):
+  Full connect + banner grab per open port + OS fingerprinting
 ```
+
+### ⚠️ Windows vs Linux Behaviour
+
+A critical difference observed in this lab: Windows 10 sends **RST for all ports** when receiving XMAS and NULL scan packets — regardless of whether the port is open or closed. Linux follows RFC 793 strictly (no response for open ports). This means XMAS and NULL scans are **unreliable against Windows targets** for determining open ports, but their packets are still clearly identifiable in Wireshark.
 
 ---
 
@@ -65,151 +64,171 @@ Version Scan (-sV):  Full connect + banner grab per open port.
 
 ```
 VirtualBox Host-Only Network: 192.168.56.0/24
-├── Kali Linux      192.168.56.101   (attacker + analyst running Wireshark)
-└── Metasploitable2 192.168.56.102   (target — deliberately vulnerable VM)
+├── Kali Linux   192.168.56.101  — attacker + Wireshark analyst
+└── Windows 10   192.168.56.102  — target (RDP, SMB, HTTP enabled)
 ```
 
-### Process
+> Update IP addresses to match your actual lab.
 
-For each scan type:
-1. Started a fresh Wireshark capture on `eth0`
-2. Ran the Nmap scan from terminal
-3. Stopped capture immediately after scan completed
-4. Saved as a separate `.pcap` file
-5. Applied filters and analysed the signature
+### Services Enabled on Windows 10 Target
 
-### Nmap Commands Run
+| Service | Port | Method |
+|---|---|---|
+| Remote Desktop (RDP) | 3389 | System Properties → Remote Settings |
+| SMB File Sharing | 139, 445 | Network and Sharing Centre |
+| HTTP (Apache/XAMPP) | 80 | XAMPP Control Panel |
+| Windows RPC | 135 | Default — always on |
+
+### Scan Commands
 
 ```bash
-sudo nmap -sS 192.168.56.102                      # SYN stealth scan
-nmap -sT 192.168.56.102                           # TCP connect scan
-sudo nmap -sU --top-ports 20 192.168.56.102       # UDP scan (top 20 ports)
-sudo nmap -sV -O -A 192.168.56.102                # Version + OS detection
-sudo nmap -sX 192.168.56.102                      # XMAS scan
-sudo nmap -sN 192.168.56.102                      # NULL scan
+sudo nmap -sS 192.168.56.102                     # SYN stealth scan
+nmap -sT 192.168.56.102                          # TCP connect scan
+sudo nmap -sU --top-ports 20 192.168.56.102      # UDP scan
+sudo nmap -sV -O -A 192.168.56.102               # Version + OS detection
+sudo nmap -sX 192.168.56.102                     # XMAS scan
+sudo nmap -sN 192.168.56.102                     # NULL scan
+```
+
+Each scan was captured separately — one `.pcap` file per scan type.
+
+### Key Wireshark Filters Used
+
+```wireshark
+tcp.flags.syn == 1 && tcp.flags.ack == 0         # SYN packets only
+tcp.flags.syn == 1 && tcp.flags.ack == 1         # SYN-ACK (open port replies)
+tcp.flags.reset == 1                              # RST packets
+tcp.flags.fin == 1 && tcp.flags.push == 1 && tcp.flags.urg == 1   # XMAS packets
+tcp.flags == 0x000                                # NULL packets
+icmp.type == 3 && icmp.code == 3                 # ICMP Port Unreachable (UDP scan)
+udp                                               # All UDP traffic
 ```
 
 ---
 
 ## 📊 Findings
 
-### Scan Signature Comparison
+### Open Ports Discovered on Windows 10 Target
 
-| Scan Type | Flag | Open Port Signature | Closed Port Signature | Noise Level |
-|---|---|---|---|---|
-| SYN Stealth | `-sS` | SYN → SYN-ACK → **RST** | SYN → RST-ACK | Medium |
-| TCP Connect | `-sT` | SYN → SYN-ACK → ACK → FIN | SYN → RST-ACK | High |
-| UDP | `-sU` | No response (silence) | **ICMP Port Unreachable** | Low |
-| Version | `-sV -O` | Full handshake + data exchange | SYN → RST-ACK | Very High |
-| XMAS | `-sX` | No response | **RST** | Low |
-| NULL | `-sN` | No response | **RST** | Low |
+| Port | Protocol | Service | Scan That Found It |
+|---|---|---|---|
+| 80 | TCP | HTTP (Apache/XAMPP) | SYN, Connect, Version |
+| 135 | TCP | Windows RPC | SYN, Connect, Version |
+| 139 | TCP | NetBIOS | SYN, Connect, Version |
+| 445 | TCP | SMB | SYN, Connect, Version |
+| 3389 | TCP | RDP | SYN, Connect, Version |
 
-> Update this table with your actual packet observations.
+> Update with your actual open ports.
 
----
+### Scan Comparison Table
 
-### SYN Scan Analysis
-
-**Wireshark filter:** `tcp.flags.syn == 1 && tcp.flags.ack == 0`
-
-The SYN scan generates the most recognisable pattern — hundreds of SYN packets sent in rapid succession to sequential port numbers from a single source IP. Key observations:
-
-- Open ports responded with SYN-ACK; Nmap immediately sent RST to avoid completing the handshake (avoiding logs on the target)
-- Closed ports responded with RST-ACK instantly
-- The entire scan completed in under 2 seconds — visible as a sharp spike in the IO Graph
-- Total packets observed: (update with your value)
-
-**Open ports discovered on Metasploitable2:**
-
-| Port | Service |
-|---|---|
-| 21 | FTP (vsftpd) |
-| 22 | SSH (OpenSSH) |
-| 23 | Telnet |
-| 80 | HTTP (Apache) |
-| 3306 | MySQL |
-| 5432 | PostgreSQL |
-
-> Update with actual results from your scan.
+| Scan | Flag | Open Port Signature | Closed Port Signature | Windows Behaviour | Noise |
+|---|---|---|---|---|---|
+| SYN Stealth | `-sS` | SYN→SYN-ACK→**RST** | SYN→RST-ACK | Standard | Medium |
+| TCP Connect | `-sT` | SYN→SYN-ACK→ACK→FIN | SYN→RST-ACK | Standard | High |
+| UDP | `-sU` | Silence / service reply | ICMP Port Unreachable | Rate-limited ICMP | Low |
+| Version | `-sV -O` | Full connect + data | SYN→RST-ACK | Standard | Very High |
+| XMAS | `-sX` | **RST (not silence)** | RST | RSTs all — unreliable | Low |
+| NULL | `-sN` | **RST (not silence)** | RST | RSTs all — unreliable | Low |
 
 ---
 
-### TCP Connect Scan Analysis
+### SYN Scan — Detailed Analysis
 
-**Wireshark filter:** `tcp`
+**Filter:** `tcp.flags.syn == 1 && tcp.flags.ack == 0`
 
-Compared to SYN scan, the connect scan shows full 3-way handshakes for every open port — significantly more packets. Every completed connection would appear in the target's connection logs, making this scan far more detectable. Packet count was approximately double the SYN scan.
+The SYN scan produced the clearest reconnaissance signature — hundreds of SYN packets sent in rapid succession to sequential destination ports from a single source IP (Kali). The entire scan completed in under 3 seconds, visible as a sharp spike on the IO Graph.
 
----
+**Open port signature (3 packets):**
+```
+Kali    → Windows:  [SYN]          seq=0
+Windows → Kali:     [SYN-ACK]      seq=0, ack=1   ← port is OPEN
+Kali    → Windows:  [RST]                          ← Nmap kills it immediately
+```
 
-### UDP Scan Analysis
-
-**Wireshark filter:** `udp` and `icmp.type == 3 && icmp.code == 3`
-
-UDP scanning is inherently slower — Nmap must wait for ICMP Port Unreachable responses (closed ports) or a timeout (open/filtered). ICMP type 3 code 3 responses confirmed closed UDP ports. Open UDP ports generated no response — they appear identical to filtered ports in the capture.
-
----
-
-### XMAS Scan Analysis
-
-**Wireshark filter:** `tcp.flags.fin == 1 && tcp.flags.push == 1 && tcp.flags.urg == 1`
-
-Every XMAS probe packet has FIN, PSH, and URG flags all set simultaneously — a combination that never occurs in legitimate TCP traffic. This makes XMAS scan packets trivial to identify but potentially able to bypass older, SYN-only firewalls. Against the Linux Metasploitable2 target, open ports returned silence and closed ports returned RST as expected.
+**Closed port signature (2 packets):**
+```
+Kali    → Windows:  [SYN]          seq=0
+Windows → Kali:     [RST-ACK]                      ← port is CLOSED
+```
 
 ---
 
-### NULL Scan Analysis
+### TCP Connect Scan — Detailed Analysis
 
-**Wireshark filter:** `tcp.flags == 0x000`
+**Filter:** `tcp`
 
-NULL scan packets carry no TCP flags whatsoever — another illegal combination in normal TCP. Behaviour mirrors XMAS scan. Both NULL and XMAS scans rely on RFC 793 behaviour (which Linux follows strictly) and are unreliable against Windows hosts.
+Connect scan generated approximately double the packet count of the SYN scan — every open port produced a full 3-way handshake before Nmap closed it with FIN. Unlike SYN scan, every completed connection is recorded in Windows Event Logs (Event ID 5156), making this the most detectable scan type. Closed ports behaved identically to SYN scan.
 
 ---
 
-### Version Scan Analysis
+### UDP Scan — Detailed Analysis
 
-**Wireshark filter:** `tcp`
+**Filter:** `udp` and `icmp.type == 3 && icmp.code == 3`
 
-The version scan is the noisiest of all — full connections to every open port followed by data exchange as Nmap reads service banners. Following the TCP Stream on any open port reveals Nmap reading HTTP headers, SSH banners, FTP welcome messages and more. This scan generates substantial traffic and is easily detected by any IDS.
+Windows 10 rate-limits ICMP Port Unreachable responses — not every closed UDP port generated an immediate ICMP reply, which caused Nmap to wait for timeouts and slowed the scan significantly. Open UDP ports produced no response. The ICMP type 3 code 3 replies that did arrive clearly identified closed ports.
+
+---
+
+### Version & OS Detection — Detailed Analysis
+
+**Filter:** `tcp`
+
+The `-A` flag triggered the most traffic of any scan — full connections to all open ports followed by data exchange as Nmap grabbed service banners. Following the TCP stream on port 3389 revealed RDP negotiation data; port 445 showed SMB protocol exchange. Nmap successfully identified the target OS:
+
+```
+OS details: Microsoft Windows 10
+```
+
+---
+
+### XMAS & NULL Scans — Windows Behaviour Note
+
+**XMAS filter:** `tcp.flags.fin == 1 && tcp.flags.push == 1 && tcp.flags.urg == 1`  
+**NULL filter:** `tcp.flags == 0x000`
+
+Both scan types were clearly identifiable in Wireshark — the illegal flag combinations (all three flags set for XMAS, no flags for NULL) have no equivalent in legitimate traffic. However, Windows 10 sent RST responses to **all** ports regardless of state, rendering these scans unable to distinguish open from closed ports on this target. This is expected Windows behaviour and differs from Linux targets which follow RFC 793 strictly.
+
+**SOC implication:** Even though these scans fail against Windows, a single XMAS or NULL packet in any production capture is an immediate red flag — no legitimate application ever generates these flag combinations.
 
 ---
 
 ## 💡 Key Observations
 
-- **SYN scan is "stealthy" but still obvious in a PCAP** — the pattern of hundreds of SYNs with no completed handshakes from one IP to one target in under 2 seconds is unmistakable. "Stealth" only means it avoids completing connections, not that it's invisible.
+- **SYN scan is fast but not invisible** — hundreds of SYNs to one target across sequential ports in under 3 seconds is unmistakable in any PCAP or SIEM. "Stealth" only means no completed connections, not no traffic.
 
-- **The RST after SYN-ACK is Nmap's signature** — in normal traffic a client never receives a SYN-ACK and then immediately sends RST. Seeing this repeatedly across ports is a definitive scan indicator.
+- **The RST after SYN-ACK is Nmap's fingerprint** — in normal traffic a client never receives a SYN-ACK then immediately RSTs. Seeing this pattern repeated dozens of times is a definitive scan indicator.
 
-- **UDP scan speed vs TCP** — the UDP scan of just 20 ports took far longer than a SYN scan of all 1000 common ports. This is because UDP has no built-in acknowledgement — Nmap must wait for timeouts on non-responsive ports.
+- **Windows rate-limits ICMP** — during UDP scanning, Windows throttles its ICMP Port Unreachable responses. This caused Nmap to time out on many ports, significantly slowing the scan. SOC implication: a burst of ICMP Unreachable messages followed by silence may indicate a target applying rate-limiting.
 
-- **XMAS and NULL scans produce zero legitimate traffic matches** — no real application ever sends a packet with no flags or with FIN+PSH+URG. A single such packet in a capture should raise an immediate alert.
+- **XMAS and NULL scans are OS-dependent** — the RFC 793 behaviour that makes these scans work only applies to Linux/Unix. Windows RSTs everything, making the scan results useless for port discovery — but the packet signatures are still instantly recognisable.
 
-- **Version scan reveals far more than port state** — the TCP streams from `-sV` contain actual service banners: SSH version strings, HTTP server headers, FTP welcome messages. All of this helps an attacker choose the right exploit — and tells a defender exactly what's exposed.
+- **Version scan is the richest for intelligence** — following TCP streams from `-sV` reveals real service data: RDP banners, SMB protocol negotiation, HTTP server headers. This is exactly what an attacker uses to choose exploits, and exactly what a defender should monitor.
 
-- **IO Graph is a powerful detection tool** — a flat baseline then a sudden spike to thousands of packets per second from one source is the visual fingerprint of automated scanning.
+- **IO Graph reveals scan timing** — a completely flat baseline then a spike to thousands of packets per second is the visual signature of automated scanning. This pattern in a SIEM would trigger an immediate alert.
 
 ---
 
 ## 🔗 SOC Relevance
 
-| Detection Indicator | What It Means | Recommended Response |
+| Detection Indicator | Attack Technique | Recommended Response |
 |---|---|---|
-| Hundreds of SYNs from one IP to one target | Port scan in progress | Block source IP, investigate host |
-| SYN → SYN-ACK → RST repeated pattern | SYN stealth scan (Nmap -sS) | Alert and investigate |
+| Hundreds of SYNs from one IP in seconds | Port scan — active recon | Block source IP, investigate host |
+| SYN → SYN-ACK → RST pattern repeated | Nmap SYN stealth scan | Alert, correlate with other indicators |
 | ICMP Port Unreachable flood | UDP scan in progress | Alert, check firewall rules |
-| Packets with FIN+PSH+URG or no flags | XMAS or NULL scan | Block source, escalate |
-| Single host connecting to 100+ ports in seconds | Automated scan tool | Immediate block and investigation |
-| Sequential port numbers in connections | Nmap or similar scanner | Correlate with threat intel |
-| Banner grab traffic after port discovery | Active reconnaissance | Host may be pre-exploitation target |
+| FIN+PSH+URG or zero-flag TCP packets | XMAS / NULL scan | Immediate block — no legitimate use |
+| Single host touching 100+ ports rapidly | Automated scan tool | Block and investigate |
+| Banner grab traffic after port scan | Pre-exploitation recon | Host may be targeted — increase monitoring |
+| Nmap OS fingerprint probes | OS detection (-O flag) | Correlate with scan alerts |
 
 ---
 
 ## 🛠️ Tools Used
 
 - **Wireshark** — packet capture and analysis
-- **Nmap** — network scanner (built into Kali)
-- **Metasploitable2** — intentionally vulnerable target VM
+- **Nmap** — network scanner (built into Kali Linux)
 - **Kali Linux** — attacker and analyst workstation
+- **Windows 10** — scan target VM
 
 ---
 
