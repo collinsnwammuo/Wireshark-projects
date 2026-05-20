@@ -92,7 +92,7 @@ tcp.stream eq 0
 -->
 ---
 
-## 02 - DNS Traffic Investigation 👉 [Open] (https://github.com/collinsnwammuo/Wireshark-projects/tree/main/DNS%20Traffic%20Investigation)
+## 02 - DNS Traffic Investigation 👉 [Open](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/DNS%20Traffic%20Investigation)
 
 ### 🎯 Scenario
 
