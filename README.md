@@ -36,7 +36,7 @@ All captures were performed in isolated lab environments using VirtualBox and co
 | 02 | [DNS Traffic Investigation](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/DNS%20Traffic%20Investigation)| DNS, UDP | Beginner | ✅ Complete |
 | 03 | [Cleartext Credential Capture](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/Cleartext%20Credential%20Capture) | HTTP, FTP | Beginner | ✅ Complete |
 | 04 | [Nmap Scan Detection & Analysis](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/Nmap%20Scan%20Detection%20&%20Analysis) | TCP, ICMP | Intermediate | ✅ Complete |
-| 05 | [ARP Spoofing / MITM Detection](#05---arp-spoofing--mitm-detection) | ARP | Intermediate | 🔄 In Progress |
+| 05 | [ARP Spoofing / MITM Detection](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/ARP%20Spoofing%20&%20MITM%20Detection)| ARP | Intermediate | 🔄 In Progress |
 | 06 | [Malware PCAP Investigation](#06---malware-pcap-investigation) | HTTP, TCP | Intermediate | 🔄 In Progress |
 | 07 | [SSH Brute Force Detection](#07---ssh-brute-force-detection) | SSH, TCP | Intermediate | 🔄 In Progress |
 | 08 | [Rogue DHCP Server Detection](#08---rogue-dhcp-server-detection) | DHCP, UDP | Advanced | ⏳ Planned |
@@ -214,7 +214,7 @@ icmp
 -->
 ---
 
-## 05 - ARP Spoofing / MITM Detection
+## 05 - ARP Spoofing / MITM Detection 👉 [Open](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/ARP%20Spoofing%20&%20MITM%20Detection)
 
 ### 🎯 Scenario
 
