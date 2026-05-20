@@ -21,7 +21,7 @@ Client                    DNS Resolver              Authoritative NS
   |                            |                          |
   |---[Query: google.com?]---->|                          |
   |                            |---[Query: google.com?]-->|
-  |                            |<--[Answer: 142.250.x.x]--|
+  |                            |<--[Answer: 142.251.142.142]--|
   |<--[Answer: 142.250.x.x]----|                          |
   |                            |                          |
 ```
@@ -88,17 +88,15 @@ tcp.port == 53               # DNS over TCP (large responses)
 
 | Record Type | Query | Answer | TTL |
 |---|---|---|---|
-| A | google.com | 142.250.x.x | 300s |
-| AAAA | google.com | 2a00:1450:xxxx | 300s |
-| MX | gmail.com | smtp.google.com (priority 10) | 3600s |
-| NS | google.com | ns1.google.com | 21600s |
-| PTR | 8.in-addr.arpa | dns.google | 21463s |
-
-> **Note:** Update the above table with actual values from your capture.
+| A | google.com | 142.251.142.142 | 64s |
+| AAAA | google.com | 2a00:1450:4003:805::200e | 64s |
+| MX | gmail.com | smtp.google.com (priority 17) | 64s |
+| NS | google.com | ns1.google.com | 64s |
+| PTR | 8.in-addr.arpa | dns.google | 64s |
 
 ### Transaction ID Matching
 
-Every DNS query carries a **Transaction ID** (e.g. `0x3fa2`). The DNS server echoes the same ID back in its response so the client can match answers to questions. Observed in capture: all Transaction IDs matched correctly between query and response — indicating normal, non-spoofed DNS traffic.
+Every DNS query carries a **Transaction ID** (`0x8ef1`). The DNS server echoes the same ID back in its response so the client can match answers to questions. Observed in capture: all Transaction IDs matched correctly between query and response — indicating normal, non-spoofed DNS traffic.
 
 ### NXDOMAIN Observation
 
@@ -143,24 +141,6 @@ Querying `thisisafakedomain12345xyz.com` returned **RCODE 3 (NXDOMAIN)** — Non
 | Very low TTL values (0–60s) | Fast-flux DNS — bulletproof hosting / botnet |
 | Duplicate Transaction IDs from different IPs | DNS spoofing attempt |
 | DNS over non-standard ports | Evasion technique — DNS on port 5353, 4444 etc. |
-
----
-
-## 📁 Files in This Folder
-
-```
-DNS Traffic Investigation/
-├── README.md                    ← This file
-├── dns-investigation.pcap       ← Full Wireshark capture
-└── screenshots/
-    ├── 01-dns-filter.png
-    ├── 02-dns-query.png
-    ├── 03-dns-response.png
-    ├── 04-record-types.png
-    ├── 05-transaction-id.png
-    ├── 06-nxdomain.png
-    └── 07-dns-statistics.png
-```
 
 ---
 
