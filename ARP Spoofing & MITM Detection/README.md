@@ -3,19 +3,19 @@
 **Difficulty:** Intermediate  
 **Protocols:** ARP, HTTP  
 **Tools:** Wireshark · arpspoof (dsniff)  
-**Lab Environment:** Kali Linux (attacker/analyst) · Windows 10 (victim) · VirtualBox Host-Only Network
+**Lab Environment:** Kali Linux (attacker/analyst) · Windows 10 (victim) · VirtualBox NAT + Host-Only Dual Adapter
 
 ---
 
 ## 🎯 Objective
 
-Execute a full ARP spoofing / Man-in-the-Middle (MITM) attack from Kali Linux against a Windows 10 victim VM, capture the attack traffic in Wireshark, and identify every indicator of compromise — from the initial ARP poisoning to live traffic interception. This project demonstrates both the offensive technique and the defensive detection methods a SOC analyst uses to identify it.
+Execute a full ARP spoofing / Man-in-the-Middle (MITM) attack from Kali Linux against a Windows 10 victim VM, capture every stage of the attack in Wireshark, and identify all indicators of compromise — from the initial ARP cache poisoning through to live traffic interception. This project demonstrates both the offensive technique and the precise detection signatures a SOC analyst uses to identify ARP-based attacks on a real network.
 
 ---
 
 ## ⚠️ Disclaimer
 
-This attack was performed in a fully isolated VirtualBox Host-Only lab environment. No real networks, users, or systems were involved. ARP spoofing on networks you do not own is illegal.
+All activity was performed in a fully isolated VirtualBox lab environment. No real networks, users, or production systems were involved. ARP spoofing on networks you do not own or have explicit permission to test is illegal.
 
 ---
 
@@ -23,44 +23,43 @@ This attack was performed in a fully isolated VirtualBox Host-Only lab environme
 
 ### What is ARP?
 
-ARP (Address Resolution Protocol) maps IP addresses to MAC addresses on a local network. When a device wants to communicate with an IP address, it broadcasts:
-*"Who has IP 192.168.56.1? Tell me your MAC address."*
-The device at that IP replies with its MAC, and the requesting device stores this mapping in its **ARP cache**.
+ARP (Address Resolution Protocol) maps IP addresses to MAC addresses on a local network segment. When a device wants to communicate with an IP, it broadcasts an ARP request — *"Who has IP 10.0.3.2? Tell me your MAC."* — and the owner of that IP replies. The requesting device stores this mapping in its **ARP cache** and uses it for all future frames destined for that IP.
 
-ARP has no authentication — any device can reply to any ARP request, or send unrequested replies. This is the fundamental weakness exploited in ARP spoofing.
+**The fundamental weakness: ARP has no authentication.** Any device can send an ARP reply to any other device at any time, claiming any IP address, without verification. The receiver updates its cache and believes the reply unconditionally.
 
 ### The Attack
 
 ```
-BEFORE ATTACK — Normal Traffic:
-─────────────────────────────────────────────────────
-Windows 10 (victim)                      Gateway
-192.168.56.102                        192.168.56.1
-MAC: 11:22:33:44:55:66    ─────────►  MAC: 77:88:99:aa:bb:cc
-[ARP cache: .1 = 77:88:99:aa:bb:cc]
+BEFORE ATTACK — Normal Traffic Flow:
+─────────────────────────────────────────────────────────────────────
+Windows 10 (victim)                                  Gateway
+192.168.56.101                                      10.0.3.2
+MAC: 11:22:33:44:55:66  ────────────────────────►  MAC: aa:bb:cc:dd:ee:ff
+
+Windows ARP cache entry:  10.0.3.2 → aa:bb:cc:dd:ee:ff  ✅ Legitimate
 
 
-DURING ATTACK — ARP Poisoning:
-─────────────────────────────────────────────────────
-Kali sends to Windows:  "192.168.56.1 is at MY MAC (aa:bb:cc:dd:ee:ff)"
-Kali sends to Gateway:  "192.168.56.102 is at MY MAC (aa:bb:cc:dd:ee:ff)"
+DURING ATTACK — After ARP Poisoning:
+─────────────────────────────────────────────────────────────────────
+Kali sends to Windows:  "10.0.3.2 is at 08:00:27:8a:35:d2"  ← LIE
+Kali sends to Gateway:  "192.168.56.101 is at 08:00:27:8a:35:d2"  ← LIE
 
-                        Kali Linux (attacker)
-Windows 10  ─────────►  192.168.56.101          ─────────►  Gateway
-(poisoned)              READS/MODIFIES TRAFFIC               (also poisoned)
-[ARP cache: .1 = aa:bb:cc:dd:ee:ff ← WRONG MAC]
+             Kali Linux (attacker) 192.168.56.102
+Windows  ──────────────► INTERCEPTS & READS ──────────────►  Gateway
+(victim)                 ALL TRAFFIC HERE                   (poisoned)
 
-Result: Every packet Windows sends to the internet passes through Kali first.
+Windows ARP cache entry:  10.0.3.2 → 08:00:27:8a:35:d2  ❌ Poisoned
+                                      (Kali's MAC — not the gateway)
 ```
 
 ### Why This is Dangerous
 
-Once traffic flows through the attacker's machine:
-- **Credential theft** — cleartext HTTP logins, FTP passwords, emails
-- **Session hijacking** — steal authenticated session cookies
-- **SSL stripping** — downgrade HTTPS to HTTP (with additional tools)
-- **DNS spoofing** — redirect victim to fake websites
-- **Traffic modification** — alter web pages, inject malware
+Once the attacker sits between victim and gateway:
+- **Credential theft** — HTTP logins, FTP passwords, POP3 email credentials all visible
+- **Session hijacking** — authenticated session cookies readable and reusable
+- **DNS hijacking** — redirect victim to attacker-controlled sites
+- **Traffic inspection** — read any unencrypted communication in real time
+- **Traffic modification** — inject content into web pages, redirect downloads to malware
 
 ---
 
@@ -69,148 +68,177 @@ Once traffic flows through the attacker's machine:
 ### Lab Setup
 
 ```
-VirtualBox Host-Only Network: 192.168.56.0/24
-├── Kali Linux    192.168.56.101   MAC: aa:bb:cc:dd:ee:ff  (attacker/analyst)
-├── Windows 10    192.168.56.102   MAC: 11:22:33:44:55:66  (victim)
-└── Gateway       192.168.56.1    MAC: 77:88:99:aa:bb:cc  (VirtualBox host)
+┌─────────────────────────────────────────────────────────────────┐
+│              VirtualBox Host-Only Network 192.168.56.0/24        │
+│                                                                   │
+│   Kali Linux                          Windows 10                 │
+│   eth0: 192.168.56.102                192.168.56.101             │
+│   MAC:  08:00:27:8a:35:d2             MAC: (80:00:27:B7:73:10)          │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│              VirtualBox NAT Network 10.0.3.0/24                  │
+│                                                                   │
+│   Kali Linux                          Gateway                    │
+│   eth1: 10.0.3.15                     10.0.3.2                   │
+│                                           │                      │
+└───────────────────────────────────────────┼─────────────────────┘
+                                            │
+                                        Internet
 ```
 
-> Update all IPs and MACs with your actual lab values.
-
-### Tools Used for Attack
+### Attack Commands
 
 ```bash
-sudo apt install dsniff -y          # installs arpspoof
-
-# Enable IP forwarding (makes MITM invisible to victim)
+# Step 1 — Enable IP forwarding (makes MITM invisible to victim)
 sudo sysctl -w net.ipv4.ip_forward=1
 
-# Terminal 1 — poison Windows' ARP cache
-sudo arpspoof -i eth0 -t 192.168.56.102 192.168.56.1
+# Step 2 — Install arpspoof
+sudo apt install dsniff -y
 
-# Terminal 2 — poison Gateway's ARP cache
-sudo arpspoof -i eth0 -t 192.168.56.1 192.168.56.102
+# Terminal 1 — poison Windows ARP cache
+# Tells Windows: "gateway 10.0.3.2 is at Kali's MAC"
+sudo arpspoof -i eth0 -t 192.168.56.101 10.0.3.2
+
+# Terminal 2 — poison gateway ARP cache
+# Tells gateway: "Windows 192.168.56.101 is at Kali's MAC"
+sudo arpspoof -i eth1 -t 10.0.3.2 192.168.56.101
 ```
 
-### Capture Method
+> Terminal 1 is the primary attack — it poisons Windows' ARP cache and produces all the detectable evidence. Terminal 2 completes the bidirectional MITM. Both run simultaneously.
 
-Two separate captures were taken:
-1. **`arp-spoofing.pcap`** — ARP filter only, captures the poisoning phase
-2. **`arp-mitm-traffic.pcap`** — No filter, captures full MITM traffic interception
+### Captures Taken
+
+| File | Interface | Filter | Purpose |
+|---|---|---|---|
+| `arp-spoofing.pcap` | eth0 | `arp` | Capture the ARP poisoning flood |
+| `arp-mitm-traffic.pcap` | eth0 | none | Capture intercepted victim traffic |
 
 ### Key Wireshark Filters Used
 
 ```wireshark
-arp                                              # All ARP traffic
-arp.opcode == 1                                  # ARP requests only
-arp.opcode == 2                                  # ARP replies only (includes spoofed)
-http                                             # Intercepted HTTP traffic from victim
+arp                                     # All ARP traffic
+arp.opcode == 1                         # ARP requests only
+arp.opcode == 2                         # ARP replies — includes all spoofed packets
+http                                    # Intercepted HTTP traffic from Windows
+ip.src == 192.168.56.101               # Traffic originating from Windows victim
 ```
 
 ---
 
 ## 📊 Findings
 
-### ARP Cache — Before, During, and After Attack
+### ARP Cache State on Windows 10 — Before, During and After
 
-| Timepoint | Gateway entry in Windows ARP cache | Status |
+| Timepoint | `10.0.3.2` entry in Windows ARP cache | Status |
 |---|---|---|
-| Before attack | `192.168.56.1` → `77:88:99:aa:bb:cc` | ✅ Legitimate |
-| During attack | `192.168.56.1` → `aa:bb:cc:dd:ee:ff` | ❌ Poisoned (Kali's MAC) |
-| After attack | `192.168.56.1` → `77:88:99:aa:bb:cc` | ✅ Restored (auto-refresh) |
+| Before attack | `10.0.3.2` → `aa:bb:cc:dd:ee:ff` (real gateway MAC) | ✅ Legitimate |
+| During attack | `10.0.3.2` → `08:00:27:8a:35:d2` (Kali's MAC) | ❌ Poisoned |
+| After attack | `10.0.3.2` → `aa:bb:cc:dd:ee:ff` (real gateway MAC) | ✅ Restored |
 
-> Update MAC addresses with your actual values from `arp -a`.
+> Replace `aa:bb:cc:dd:ee:ff` with the actual gateway MAC from your `arp -n` output.
 
 ---
 
-### Indicators of Compromise Identified in Wireshark
+### Indicators of Compromise Identified
 
 #### IOC 1 — Unsolicited ARP Replies (Gratuitous ARP)
 
-Normal ARP follows a request/reply pattern — a device asks, another answers. During the attack, Kali sent continuous ARP replies **that nobody requested**. These are called **Gratuitous ARPs** and are the core attack packet.
-
 **Filter:** `arp.opcode == 2`
 
-Each spoofed packet contained a deliberate lie:
+Normal ARP follows a strict request → reply pattern. During the attack, Kali sent continuous ARP replies that no device requested — these are called Gratuitous ARPs and are the core attack mechanism. Each packet contained a deliberate falsification:
+
 ```
-ARP Reply:
-  Sender MAC:  aa:bb:cc:dd:ee:ff  ← Kali's real MAC
-  Sender IP:   192.168.56.1       ← Gateway's IP (the lie)
-  Target MAC:  11:22:33:44:55:66  ← Windows victim
-  Target IP:   192.168.56.102
+ARP Reply (spoofed) — expanded in Wireshark:
+┌──────────────────────────────────────────────────────┐
+│ Address Resolution Protocol (reply)                   │
+│   Opcode:      reply (2)                              │
+│   Sender MAC:  08:00:27:8a:35:d2  ← Kali's real MAC  │
+│   Sender IP:   10.0.3.2           ← Gateway IP (LIE) │
+│   Target MAC:  11:22:33:44:55:66  ← Windows victim   │
+│   Target IP:   192.168.56.101                         │
+└──────────────────────────────────────────────────────┘
 ```
 
-The mismatch between Sender IP (gateway) and Sender MAC (Kali) is the attack signature.
+The mismatch between Sender IP (gateway) and Sender MAC (Kali) is the definitive attack signature.
 
 ---
 
-#### IOC 2 — Duplicate IP Address Warning
+#### IOC 2 — Duplicate IP Address Detection (Auto-flagged by Wireshark)
 
-Wireshark automatically detected the attack. Packets were highlighted with a warning and the Expert Information panel showed:
+Wireshark detected the attack automatically. When Kali's MAC began claiming the gateway IP `10.0.3.2` — an IP previously associated with a different MAC — Wireshark highlighted the packets and logged:
 
 ```
-Warning: Duplicate IP address detected for 192.168.56.1
-         (first seen at [legitimate MAC], now at [Kali MAC])
+Warning: Duplicate IP address detected for 10.0.3.2
 ```
 
-This automatic detection appears in **Analyse → Expert Information → Warnings**.
+Visible without any manual analysis in **Analyse → Expert Information → Warnings**.
 
 ---
 
-#### IOC 3 — Single MAC Claiming Multiple IPs
+#### IOC 3 — Unsolicited Reply Flood (No Preceding Requests)
 
-In the ARP reply flood, Kali's MAC address (`aa:bb:cc:dd:ee:ff`) appeared as the sender in replies claiming to be both the gateway IP and other addresses. One MAC address should never legitimately claim multiple IPs simultaneously.
-
----
-
-#### IOC 4 — ARP Reply Rate Anomaly
-
-Normal ARP traffic is sparse — a few packets per minute at most.
-During the attack: constant stream of ARP replies from one MAC, multiple per second.
-
-IO Graph showed a flat ARP baseline → sudden sustained spike → flat again when attack stopped.
+Normal ARP traffic is sparse and always follows request/reply pairs. During the attack:
+- Continuous stream of ARP opcode 2 (reply) packets from Kali's MAC
+- No corresponding ARP requests preceding them
+- Rate: multiple packets per second sustained throughout the attack
+- IO Graph showed: flat baseline → sustained spike → flat again after attack stopped
 
 ---
 
-#### IOC 5 — Intercepted HTTP Traffic
+#### IOC 4 — One MAC Address Claiming Multiple IPs
 
-With IP forwarding enabled, Windows' HTTP traffic routed through Kali and was fully visible in Wireshark. The victim's source IP appeared in HTTP packets destined for external sites — traffic that should not have been visible on Kali's interface at all without an active MITM.
+Across the capture, Kali's MAC (`08:00:27:8a:35:d2`) appeared as sender in ARP replies claiming to be both `10.0.3.2` (the gateway) and its own legitimate IP. In legitimate traffic, one physical MAC address maps to one IP. Any device claiming multiple IPs via ARP warrants immediate investigation.
+
+---
+
+#### IOC 5 — Victim Traffic on Attacker Interface
+
+**Filter in `arp-mitm-traffic.pcap`:** `http`
+
+With IP forwarding enabled, Windows' outbound traffic routed through Kali before reaching the gateway. HTTP packets with Windows' source IP (`192.168.56.101`) appeared on Kali's `eth0` interface — traffic Kali should never see without actively intercepting it. Following the TCP stream revealed Windows' complete HTTP request in plaintext, fully readable on the attacker's machine.
 
 ---
 
 ## 💡 Key Observations
 
-- **ARP has no authentication by design** — the protocol was built in an era where network security was not a concern. There is no mechanism to verify that an ARP reply is legitimate. This has never been fixed at the protocol level.
+- **ARP has no authentication and cannot be patched at the protocol level** — the fix exists at the network infrastructure layer (Dynamic ARP Inspection on managed switches) not in the protocol itself. Every device on every network is vulnerable to this attack without infrastructure-level protection.
 
-- **Wireshark detects this automatically** — the duplicate IP warning in Expert Information fires without any manual analysis needed. In a real SOC environment, this same detection logic is built into IDS tools like Suricata and Snort.
+- **IP forwarding is what makes the attack invisible** — without `net.ipv4.ip_forward=1`, Kali drops all intercepted packets. Windows loses internet access immediately and the victim is alerted. With forwarding enabled, the victim browses normally while completely compromised.
 
-- **IP forwarding is what makes the attack invisible** — without `net.ipv4.ip_forward=1`, Kali would intercept and DROP all Windows traffic, breaking the victim's connection and immediately alerting the user. With forwarding enabled, the victim experiences no interruption while being completely compromised.
+- **ARP cache is temporary and self-healing** — Windows refreshes ARP entries every few minutes. The attacker must continuously flood fake replies to maintain the poisoning. This sustained flood is precisely what makes the attack detectable — normal ARP traffic is nearly silent.
 
-- **ARP cache is temporary** — Windows automatically refreshes its ARP cache every few minutes. This means the attacker must continuously send spoofed ARP replies to maintain the poisoning, which is exactly why the attack generates a sustained flood rather than a single packet.
+- **Wireshark caught this with zero manual effort** — the duplicate IP warning in Expert Information fires automatically the moment a second MAC claims an existing IP. In production environments this same detection logic runs in Suricata, Snort, and enterprise NDR platforms.
 
-- **HTTPS severely limits the damage** — while ARP spoofing redirects traffic through the attacker, HTTPS encryption means the attacker can read metadata (destination, timing, volume) but not the content. HTTP traffic is fully readable. This reinforces why HTTPS everywhere matters.
+- **HTTPS limits but does not prevent the attack** — ARP spoofing redirects all traffic regardless of encryption. Against HTTPS the attacker sees destination IPs, timing, and data volumes but not content. Against HTTP everything is fully readable including credentials, session tokens, and page content.
 
-- **The before/after ARP table comparison is forensic proof** — if you captured a Windows ARP table showing an unexpected MAC for a known IP, that is direct evidence of an ARP poisoning attack.
+- **The before/after ARP table is forensic proof** — the two screenshots of Windows' ARP cache showing the MAC change and restoration are direct, unambiguous evidence of the attack occurring. This is the kind of artefact a digital forensics analyst would collect during an incident investigation.
 
 ---
 
 ## 🔗 SOC Relevance
 
-| Detection Method | Tool | What to Look For |
-|---|---|---|
-| ARP monitoring | Wireshark / IDS | Gratuitous ARPs, duplicate IP warnings |
-| Dynamic ARP Inspection (DAI) | Managed switch | Block unauthorised ARP replies at switch level |
-| ARP cache monitoring | Endpoint agent | Gateway MAC changed unexpectedly |
-| Network behaviour analysis | SIEM | Sudden ARP flood from internal host |
-| Static ARP entries | OS / router | Hardcode gateway MAC — immune to poisoning |
-| 802.1X port authentication | Network | Authenticate devices before they can send ARP |
+### Detection Methods
 
-| Attack Indicator | Severity | SOC Response |
+| Method | Tool | What It Detects |
 |---|---|---|
-| Gratuitous ARP flood from internal IP | High | Isolate source host, investigate |
-| Duplicate IP warning for gateway | Critical | Immediate investigation — active MITM possible |
-| Gateway MAC changed in ARP table | Critical | Block source, notify users, reset ARP caches |
-| Internal HTTP credential traffic on unexpected host | Critical | Incident response — credentials likely compromised |
+| Gratuitous ARP monitoring | Wireshark / Suricata | Unsolicited ARP replies from unexpected MACs |
+| Duplicate IP detection | Wireshark Expert Info | Two MACs claiming same IP — fires automatically |
+| Dynamic ARP Inspection (DAI) | Managed switch | Blocks unauthorised ARP replies at layer 2 |
+| ARP cache monitoring | Endpoint agent / SIEM | Alerts when gateway MAC changes unexpectedly |
+| Static ARP entries | OS / router | Hardcoded gateway MAC — immune to poisoning |
+| ARP traffic baseline | SIEM / NDR | Alerts on ARP volume spike from internal host |
+
+### SOC Alert Triggers
+
+| Indicator | Severity | Response |
+|---|---|---|
+| Gratuitous ARP flood from internal host | High | Isolate source, investigate device |
+| Duplicate IP warning for gateway IP | Critical | Active MITM likely — immediate investigation |
+| Gateway MAC changed in endpoint ARP table | Critical | Block source, notify users, reset ARP caches |
+| Victim HTTP traffic appearing on unexpected host | Critical | Incident response — data interception confirmed |
+| Single MAC claiming multiple IPs | High | Investigate device at that MAC address |
 
 ---
 
@@ -218,8 +246,9 @@ With IP forwarding enabled, Windows' HTTP traffic routed through Kali and was fu
 
 - **Wireshark** — packet capture and analysis
 - **arpspoof** (dsniff package) — ARP poisoning tool
-- **Kali Linux** — attacker and analyst workstation
-- **Windows 10** — victim VM
+- **Kali Linux** — attacker and analyst workstation (eth0: 192.168.56.102, eth1: 10.0.3.15)
+- **Windows 10** — victim VM (192.168.56.101)
+- **VirtualBox** — NAT + Host-Only dual adapter network
 
 ---
 
