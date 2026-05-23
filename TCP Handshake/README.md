@@ -7,9 +7,9 @@
 
 ---
 
-## 🎯 Objective
+## 🎯 What I Did
 
-Capture a complete TCP connection lifecycle and identify each phase — SYN, SYN-ACK, ACK (3-way handshake), data transfer, and FIN teardown — by analysing packets in Wireshark. This builds the foundational skill of recognising normal TCP behaviour before hunting for anomalies.
+I captured a live TCP connection from my Kali Linux VM and used Wireshark to analyse every phase of the session — the 3-way handshake, data transfer, and FIN teardown. This was my first hands-on packet analysis exercise and it gave me a solid understanding of what normal TCP traffic looks like, which I now use as a baseline when hunting for anomalies.
 
 ---
 
@@ -31,24 +31,25 @@ Client          Server
   |---[ACK]------->|   "Acknowledged. Connection closed."
 ```
 
-Understanding this flow is essential for a SOC analyst as almost every network attack involves manipulating TCP behaviour (SYN floods, RST injection, port scans, etc.).
+Understanding this flow is essential for a SOC analyst — almost every network attack involves manipulating TCP behaviour in some way, whether that's SYN floods, RST injection, or port scanning.
 
 ---
 
-## 🔬 Methodology
+## 🔬 How I Did It
 
 ### Traffic Generation
-Generated a clean HTTP request from Kali Linux to trigger a full TCP session:
+I generated a clean HTTP request from Kali to trigger a full TCP session:
 ```bash
 curl http://example.com
 ```
+I chose `curl` over a browser because it produces a single, clean TCP stream with no background noise — much easier to analyse as a first exercise.
 
 ### Capture Method
 - Interface: `eth0`
-- Capture filter: none (captured all traffic, filtered in Wireshark post-capture)
+- Capture filter: none — I captured everything and filtered inside Wireshark afterwards
 - Duration: Single HTTP request + response
 
-### Key Display Filters Used
+### Wireshark Filters I Used
 
 ```wireshark
 tcp                                          # Show all TCP traffic
@@ -61,7 +62,7 @@ tcp.stream eq 0                              # Isolate a single TCP conversation
 
 ---
 
-## 📊 Findings
+## 📊 What I Found
 
 ### Connection Details
 
@@ -70,10 +71,12 @@ tcp.stream eq 0                              # Isolate a single TCP conversation
 | Client IP | `10.0.x.x` (Kali VM) |
 | Server IP | `104.20.23.154` (example.com) |
 | Destination Port | `80` (HTTP) |
-| Client Source Port | `52300`) |
+| Client Source Port | `52300` |
 | Protocol | TCP over IPv4 |
 
 ### 3-Way Handshake — Packet Breakdown
+
+I identified each step of the handshake by filtering on TCP flags:
 
 | Step | Direction | Flags | Seq | Ack |
 |---|---|---|---|---|
@@ -81,37 +84,31 @@ tcp.stream eq 0                              # Isolate a single TCP conversation
 | SYN-ACK | Server → Client | `SYN, ACK` | 0 (relative) | 1 |
 | ACK | Client → Server | `ACK` | 1 | 1 |
 
-### TCP Options Observed in SYN Packet
+### TCP Options I Observed in the SYN Packet
+
+Expanding the TCP layer in the middle pane of Wireshark, I found the following options negotiated during the handshake:
 
 - **MSS (Maximum Segment Size):** 1460 bytes
-- **Window Scale:** Present (indicates large window support)
-- **SACK Permitted:** Yes (Selective Acknowledgement enabled)
+- **Window Scale:** Present — indicates large window support is enabled
+- **SACK Permitted:** Yes — Selective Acknowledgement is enabled
 - **Timestamps:** Present
 
 ### Teardown Method
-Clean **FIN-ACK** teardown (not RST) — both sides gracefully closed the connection.
+The session ended with a clean **FIN-ACK** teardown — both sides gracefully closed the connection. No RST was observed, which is what I'd expect from a normal, well-behaved HTTP session.
 
 ---
-<!--
-## 📸 Screenshots
 
-| Screenshot | Description |
-|---|---|
-| `screenshots/01-syn.png` | SYN packet — flags and sequence number visible |
-| `screenshots/02-syn-ack.png` | SYN-ACK response from server |
-| `screenshots/03-ack.png` | Final ACK completing the handshake |
-| `screenshots/04-tcp-stream.png` | Follow TCP Stream — full conversation view |
-| `screenshots/05-fin.png` | FIN teardown — clean session close |
-| `screenshots/06-full-capture.png` | Full Wireshark capture with TCP filter applied |
+## 💡 What I Learned
 
----
--->
-## 💡 Key Observations
+- **The ISN (Initial Sequence Number) is always randomised** — this is a deliberate security measure to prevent sequence prediction attacks. Wireshark displays relative sequence numbers starting at 0 by default, which makes the handshake much easier to read.
 
-- The **ISN (Initial Sequence Number)** is randomised — a security measure to prevent sequence prediction attacks. Wireshark displays relative sequence numbers (starting at 0) by default for readability.
-- A clean teardown uses **FIN** packets. An abrupt termination uses **RST** — RSTs in unexpected contexts are often a sign of scanning, firewall blocking, or connection abuse.
-- The **TCP Window Size** grows during the session (TCP slow start / congestion control) — visible if you watch the window field across packets.
-- Wireshark's **Expert Info** (`Analyse → Expert Information`) flagged zero issues on this clean capture — useful baseline reference.
+- **FIN vs RST tells a story** — a clean FIN teardown means the session ended normally. An unexpected RST mid-session means something forcibly killed the connection — a firewall rule, an IDS blocking traffic, or an attacker injecting a reset.
+
+- **TCP Window Size grows over time** — I could see the window size increasing across packets as TCP's slow start and congestion control algorithms kicked in. This is completely normal behaviour that I now recognise as a baseline.
+
+- **Expert Information is a useful first check** — I ran Analyse → Expert Information on my capture and it flagged zero issues. I'll use a clean capture like this as a reference point when I see Expert Info warnings in future exercises, so I know what's normal and what isn't.
+
+- **A single `curl` generates surprisingly few packets** — the entire HTTP request and response, including the full TCP lifecycle, completed in just a handful of packets. This made it easy to study each one individually.
 
 ---
 
@@ -119,36 +116,19 @@ Clean **FIN-ACK** teardown (not RST) — both sides gracefully closed the connec
 
 | What I Learned | How It Applies in a SOC |
 |---|---|
-| SYN without SYN-ACK (no response) | Port is closed or filtered — seen in port scans |
+| SYN without SYN-ACK (no response) | Port is closed or filtered — common in port scans |
 | Flood of SYNs from one IP | SYN flood DoS attack — triggers IDS alerts |
-| RST after handshake | Connection forcibly killed — possible firewall or IDS block |
-| Many half-open connections | SYN scan (Nmap `-sS`) — stealth reconnaissance |
-| Very short sessions (SYN → RST) | Port scan or connection refused |
+| RST after handshake | Connection forcibly killed — firewall block or IDS intervention |
+| Many half-open connections | SYN scan (Nmap `-sS`) — stealth reconnaissance in progress |
+| Very short sessions (SYN → RST) | Port scan or service refusing connection |
 
 ---
-<!--
-## 📁 Files in This Folder
 
-```
-TCP Handshake/
-├── README.md               ← This file
-├── tcp-handshake.pcap      ← Full Wireshark capture
-└── screenshots/
-    ├── 01-syn.png
-    ├── 02-syn-ack.png
-    ├── 03-ack.png
-    ├── 04-tcp-stream.png
-    ├── 05-fin.png
-    └── 06-full-capture.png
-```
-
----
--->
-## 🛠️ Tools Used
+## 🛠️ Tools I Used
 
 - **Wireshark** — packet capture and analysis
-- **curl** — HTTP client to generate TCP traffic
-- **Kali Linux** — lab environment
+- **curl** — HTTP client to generate clean TCP traffic
+- **Kali Linux** — my lab environment
 
 ---
 
