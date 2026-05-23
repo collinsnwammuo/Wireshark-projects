@@ -6,107 +6,106 @@
 
 ---
 
-## 🎯 Objective
+## 🎯 What I Did
 
-Demonstrate how credentials transmitted over unencrypted protocols (HTTP and FTP) can be captured and read directly from network traffic using Wireshark — and contrast this with HTTPS to show why encryption is non-negotiable. This is one of the most fundamental concepts in network security and a daily reality in SOC analyst work.
+I set up DVWA and an FTP server on my Kali VM, submitted real login credentials over both HTTP and FTP while Wireshark was capturing, and then pulled those credentials straight out of the packets. I also captured HTTPS traffic side by side to show the difference encryption makes. This was one of the most eye-opening exercises so far because seeing your own password sitting in plain text inside a packet makes the risk feel very real.
 
 ---
 
 ## ⚠️ Disclaimer
 
-All traffic captured in this project was generated in a fully isolated VirtualBox lab environment. No real credentials, external systems, or production networks were involved. This project is purely for educational purposes.
+All traffic in this project was generated in a fully isolated VirtualBox lab environment. No real credentials, external systems, or production networks were involved. This is purely for educational purposes.
 
 ---
 
 ## 🧠 Background
 
-Many legacy protocols transmit data including usernames and passwords in **plaintext**, meaning anyone on the same network with a packet capture tool can read them directly.
+Many legacy protocols transmit usernames and passwords in **plaintext**, meaning anyone on the same network with a packet capture tool can read them directly.
 
 ```
 HTTP Login (CLEARTEXT):
 Client → Server:
   POST /login HTTP/1.1
   Host: 127.0.0.1
-  Content: username=testuser&password=hunter2    ← VISIBLE TO ANYONE
+  Content: username=testuser&password=hunter2    <- VISIBLE TO ANYONE
 
 FTP Login (CLEARTEXT):
-Client → Server:  USER ftpuser               ← VISIBLE
+Client → Server:  USER ftpuser               <- VISIBLE
 Server → Client:  331 Password required
-Client → Server:  PASS ftpkali               ← VISIBLE
+Client → Server:  PASS ftpkali               <- VISIBLE
 Server → Client:  230 Login successful
 
 HTTPS Login (ENCRYPTED):
-Client → Server:  [TLS Application Data - encrypted gibberish]
-                  ← NO readable content, credentials protected
+Client → Server:  [TLS Application Data]
+                  <- Nothing readable, credentials fully protected
 ```
 
-**Protocols that send credentials in cleartext:**
+**Protocols that expose credentials in cleartext:**
 
-| Protocol | Port | Risk |
+| Protocol | Port | What Gets Exposed |
 |---|---|---|
 | HTTP | 80 | Login forms, cookies, session tokens |
 | FTP | 21 | Username and password fully visible |
-| Telnet | 23 | Entire session including commands |
-| SMTP (no TLS) | 25 | Email credentials and content |
+| Telnet | 23 | Entire session including every command typed |
+| SMTP (no TLS) | 25 | Email credentials and message content |
 | POP3 (no TLS) | 110 | Email credentials |
-| SNMP v1/v2 | 161 | Community strings (passwords) |
+| SNMP v1/v2 | 161 | Community strings used as passwords |
 
 ---
 
-## 🔬 Methodology
+## 🔬 How I Did It
 
 ### Lab Setup
 
 ```
 Kali Linux VM
-├── DVWA (Damn Vulnerable Web App) — HTTP login target
-├── vsftpd — FTP server running locally
-└── Wireshark — capturing on loopback (lo) and eth0
+├── DVWA (Damn Vulnerable Web App) -- HTTP login target
+├── vsftpd -- FTP server running locally
+└── Wireshark -- capturing on loopback (lo)
 ```
 
-### Part A — HTTP Credential Capture
+I captured everything on the **loopback interface (lo)** because both DVWA and vsftpd were running locally on Kali. Traffic to 127.0.0.1 goes through loopback, not eth0, so selecting the wrong interface would have given me an empty capture.
 
-Deployed DVWA on Kali and submitted a login form over HTTP while Wireshark captured on the loopback interface.
+### Part A -- HTTP Credential Capture
+
+I installed DVWA, started it, and submitted a login form while Wireshark was running:
 
 ```bash
-# DVWA setup
 sudo apt install dvwa -y && sudo dvwa-start
 # Accessed at http://127.0.0.1:42001
-# Submitted login: username=testuser, password=hunter2
+# Login submitted: username=testuser, password=hunter2
 ```
 
-**Wireshark filters used:**
+**Filters I used:**
 ```wireshark
-http.request.method == "POST"          # Find login POST request
+http.request.method == "POST"          # Find the login POST request
 http                                   # All HTTP traffic
 ```
 
-### Part B — FTP Credential Capture
+### Part B -- FTP Credential Capture
 
-Installed and configured vsftpd on Kali, connected via FTP client, and captured the full authentication sequence.
+I set up a local FTP server and connected to it with the FTP client while capturing:
 
 ```bash
-# FTP server setup
 sudo apt install vsftpd -y
 sudo systemctl start vsftpd
 sudo useradd -m ftpuser && sudo passwd ftpuser
 
-# FTP client connection
 ftp 127.0.0.1
 ```
 
-**Wireshark filters used:**
+**Filters I used:**
 ```wireshark
-ftp                                    # All FTP control channel traffic
-ftp.request.command == "USER"          # Username packet only
-ftp.request.command == "PASS"          # Password packet only
-ftp.response.code == 230               # Successful login response
-ftp-data                               # FTP data channel (file transfers)
+ftp                                    # All FTP control traffic
+ftp.request.command == "USER"          # Just the username packet
+ftp.request.command == "PASS"          # Just the password packet
+ftp.response.code == 230               # Successful login confirmation
+ftp-data                               # FTP data channel
 ```
 
-### Part C — HTTPS Comparison
+### Part C -- HTTPS Comparison
 
-Captured HTTPS traffic to the same type of site for direct comparison, showing what encrypted traffic looks like versus cleartext.
+I visited an HTTPS site and captured the traffic to compare it directly against the HTTP and FTP captures:
 
 ```wireshark
 tls                                    # TLS/HTTPS traffic
@@ -115,79 +114,80 @@ ssl.record.content_type == 23          # Application Data (encrypted payload)
 
 ---
 
-## 📊 Findings
+## 📊 What I Found
 
-### Part A — HTTP Results
+### Part A -- HTTP Results
 
 | Field | Value |
 |---|---|
 | Protocol | HTTP/1.1 |
 | Method | POST |
 | Target URL | `http://127.0.0.1:42001/login.php` |
-| Credentials exposed | Username and password visible in packet payload |
+| Credentials exposed | Username and password fully visible in packet payload |
 | Capture interface | Loopback (lo) |
 
-**Credentials found in packet:**
+**Exact credentials I pulled from the packet:**
 ```
 username=testuser&password=hunter2
 ```
-> Fully readable with zero effort — no decryption, no tools beyond Wireshark.
+No decryption needed. No special tools. Just Wireshark and a filter.
 
-### Part B — FTP Results
+### Part B -- FTP Results
 
-| Packet | Content Visible |
+| Packet | What I Could Read |
 |---|---|
-| USER command | `USER ftpuser` — username in plaintext |
-| PASS command | `PASS ftpkali` — password in plaintext |
+| USER command | `USER ftpuser` in plaintext |
+| PASS command | `PASS ftpkali` in plaintext |
 | Server response | `230 Login successful` |
-| Session | All commands (ls, pwd, quit) fully readable |
+| Full session | Every command I typed (ls, pwd, quit) was readable |
 
-### Part C — HTTPS Comparison
+### Part C -- HTTPS Comparison
 
 | Field | HTTP | HTTPS |
 |---|---|---|
-| Credentials visible | ✅ Yes — plaintext | ❌ No — encrypted |
-| Content readable | ✅ Yes | ❌ No |
-| Attack difficulty | Trivial | Requires key/cert compromise |
-| Wireshark payload | Username & password | `Application Data` (ciphertext) |
+| Credentials visible | Yes, plaintext | No, encrypted |
+| Content readable | Yes | No |
+| Wireshark payload | Username and password in full | `Application Data` (unreadable ciphertext) |
 
 ---
 
-## 💡 Key Observations
+## 💡 What I Learned
 
-- **HTTP POST parameters are fully visible** in the packet payload — no special tool needed, just Wireshark and a filter. Any attacker on the same LAN (or running a MITM attack) can harvest credentials instantly.
+- **Seeing your own password in a packet is genuinely unsettling.** I typed `hunter2` into DVWA, opened the POST packet in Wireshark, and there it was sitting in the payload in plain text. No effort required. This exercise made the risk of cleartext protocols feel concrete rather than theoretical.
 
-- **FTP is even more dangerous than HTTP** — not only are credentials sent in cleartext, but the entire session (every command typed, every file listed or transferred) is readable. FTP should never be used on any modern network.
+- **FTP exposes more than just the password.** After logging in I ran a few commands and could read every single one of them in the TCP stream. Every file I listed, every directory I changed to, all of it visible. FTP is not just a credential risk, it is a full session exposure risk.
 
-- **Follow TCP/HTTP Stream is the most powerful feature here** — it reconstructs the entire conversation in human-readable format, exactly as the attacker would see it. One right-click to compromise a session.
+- **Follow TCP/HTTP Stream is the feature that makes this real.** Right-clicking a packet and following the stream reconstructs the entire conversation in a readable format. It takes about two seconds to go from a raw capture to seeing someone's login details laid out clearly. This is what an attacker with MITM access sees.
 
-- **HTTPS makes this attack impossible** without the private key or a TLS interception proxy. The payload in a TLS capture is completely unreadable — all you see is metadata (IP, port, timing) but no content.
+- **HTTPS makes the content completely unreadable.** When I applied the `tls` filter to the HTTPS capture, all I could see in the payload was `Application Data`. No usernames, no passwords, no page content. The only metadata visible was the destination IP, port, and packet timing. This is the difference encryption actually makes.
 
-- **Cookies and session tokens** transmitted over HTTP are just as dangerous as passwords — an attacker can use a captured session cookie to hijack an authenticated session without ever knowing the password (session hijacking).
+- **Session cookies are just as valuable as passwords.** I noted that HTTP responses include Set-Cookie headers which are also fully visible in the capture. An attacker who grabs a session cookie can impersonate an authenticated user without ever needing the password. This is session hijacking and it works on any site that does not use HTTPS.
+
+- **The loopback interface catches localhost traffic.** I learned this the hard way when I started capturing on eth0 and got nothing. Traffic to 127.0.0.1 does not go through eth0 at all. Switching to lo fixed it immediately. I will remember this for any future exercise involving locally hosted services.
 
 ---
 
 ## 🔗 SOC Relevance
 
-| Scenario | SOC Action |
+| Scenario | What I Would Do |
 |---|---|
-| HTTP login detected on corporate network | Alert — credentials may be compromised. Enforce HTTPS |
-| FTP traffic detected from internal host | Alert — legacy protocol in use. Identify system and remediate |
-| Cleartext auth to internal application | Raise finding — application needs TLS enforcement |
-| MITM attack in progress on LAN | ARP spoofing + HTTP credential harvesting = full account compromise |
-| Telnet traffic detected | Critical — entire session including commands is exposed |
-| Unencrypted SMTP on port 25 | Email credentials and content at risk — enforce STARTTLS |
+| HTTP login traffic detected on corporate network | Raise alert, credentials may be compromised, enforce HTTPS |
+| FTP traffic from internal host | Alert, identify the system, begin remediation |
+| Cleartext authentication to internal app | Raise finding, application needs TLS |
+| MITM attack combined with HTTP traffic | ARP spoofing plus credential harvesting equals full compromise |
+| Telnet traffic detected | Treat as critical, entire session is exposed |
+| SMTP on port 25 with no TLS | Email credentials and content at risk, enforce STARTTLS |
 
 ---
 
-## 🛠️ Tools Used
+## 🛠️ Tools I Used
 
-- **Wireshark** — packet capture and analysis
-- **DVWA** (Damn Vulnerable Web Application) — HTTP login target
-- **vsftpd** — FTP server
-- **ftp** — FTP client (built into Kali)
-- **Firefox** — browser for HTTP/HTTPS traffic generation
-- **Kali Linux** — lab environment
+- **Wireshark** -- packet capture and analysis
+- **DVWA** (Damn Vulnerable Web Application) -- HTTP login target
+- **vsftpd** -- FTP server
+- **ftp** -- FTP client built into Kali
+- **Firefox** -- browser for HTTPS comparison traffic
+- **Kali Linux** -- my lab environment
 
 ---
 
