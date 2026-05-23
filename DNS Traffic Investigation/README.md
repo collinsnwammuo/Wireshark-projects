@@ -6,57 +6,60 @@
 
 ---
 
-## 🎯 Objective
+## 🎯 What I Did
 
-Capture and analyse DNS (Domain Name System) traffic to understand how name resolution works at the packet level — including query/response pairs, different record types, TTL values, Transaction IDs, and anomalous responses like NXDOMAIN. DNS is one of the most abused protocols in real-world attacks, making it a critical protocol for any SOC analyst to understand deeply.
+I generated several different types of DNS traffic from my Kali VM and captured them in Wireshark, then worked through the capture analysing query/response pairs, different record types, TTL values, Transaction IDs, and what an NXDOMAIN response looks like at the packet level. DNS is one of the most abused protocols in real-world attacks, so I treated this exercise as building the baseline knowledge I need before I can spot malicious DNS activity in a real investigation.
 
 ---
 
 ## 🧠 Background
 
-DNS translates human-readable domain names into IP addresses. Every time a device visits a website, sends an email, or connects to any service, DNS queries happen first — often invisibly.
+DNS translates human-readable domain names into IP addresses. Every time a device visits a website, sends an email, or connects to any service, DNS queries happen first — often invisibly in the background.
 
 ```
 Client                    DNS Resolver              Authoritative NS
   |                              |                          |
-  |---[Query: google.com?]---->  |                          |
+  |---[Query: google.com?]-----> |                          |
   |                              |---[Query: google.com?]-->|
   |                              |<--[Ans: 142.251.142.142]-|
   |<--[Answer: 142.251.142.142]--|                          |
   |                              |                          |
 ```
 
-**Why DNS matters to a SOC analyst:**
-- Malware uses DNS to find C2 servers (Domain Generation Algorithms)
-- DNS tunnelling can exfiltrate data hidden inside DNS queries
-- A flood of NXDOMAIN responses can indicate malware trying to reach sinkholed/dead C2 infrastructure
-- DNS spoofing/poisoning redirects victims to attacker-controlled servers
-- Unusual record types (TXT, NULL) queried in high volumes signal tunnelling
+**Why I think DNS matters for SOC work:**
+- Malware uses DNS to locate C2 servers — Domain Generation Algorithms produce hundreds of random domains per day looking for an active one
+- DNS tunnelling hides data exfiltration inside DNS queries — a technique that bypasses many firewalls
+- A flood of NXDOMAIN responses often means malware is cycling through dead C2 domains
+- DNS spoofing and poisoning redirect victims to attacker-controlled servers without them knowing
+- Unusual record types like TXT queried at high volume are a tunnelling indicator
 
 ---
 
-## 🔬 Methodology
+## 🔬 How I Did It
 
-### Traffic Generation
-Generated multiple DNS query types from Kali Linux using `nslookup` and `dig`:
+### Traffic I Generated
+
+I deliberately generated several different DNS record types so I could study each one individually in Wireshark:
 
 ```bash
-nslookup google.com                    # A record (IPv4)
-nslookup -type=AAAA google.com         # AAAA record (IPv6)
-nslookup -type=MX gmail.com            # MX record (mail server)
-nslookup -type=NS google.com           # NS record (nameservers)
-nslookup 8.8.8.8                       # PTR record (reverse lookup)
-nslookup thisisafakedomain12345xyz.com # NXDOMAIN simulation
+nslookup google.com                    # A record — standard IPv4 lookup
+nslookup -type=AAAA google.com         # AAAA record — IPv6 address
+nslookup -type=MX gmail.com            # MX record — mail server
+nslookup -type=NS google.com           # NS record — nameservers
+nslookup 8.8.8.8                       # PTR record — reverse DNS lookup
+nslookup thisisafakedomain12345xyz.com # Simulated NXDOMAIN
 dig google.com
 dig google.com MX
 ```
 
+I also deliberately queried a domain I made up to generate an NXDOMAIN response — this is the same response malware gets when it tries to reach a dead C2 domain, so I wanted to see exactly what it looks like in a capture.
+
 ### Capture Method
 - Interface: `eth0`
-- Display filter applied post-capture: `dns`
-- File saved as: `dns-investigation.pcap`
+- Display filter post-capture: `dns`
+- Saved as: `dns-investigation.pcap`
 
-### Key Display Filters Used
+### Wireshark Filters I Used
 
 ```wireshark
 dns                          # All DNS traffic
@@ -68,39 +71,39 @@ dns.qry.type == 15           # MX records (mail)
 dns.qry.type == 2            # NS records (nameservers)
 dns.qry.type == 12           # PTR records (reverse DNS)
 dns.flags.rcode == 3         # NXDOMAIN responses
-tcp.port == 53               # DNS over TCP (large responses)
+tcp.port == 53               # DNS over TCP
 ```
 
 ---
 
-## 📊 Findings
+## 📊 What I Found
 
 ### Protocol Behaviour
 
-| Observation | Detail |
+| Observation | What I Saw |
 |---|---|
-| Transport protocol | UDP port 53 (all queries fit within UDP) |
-| TCP DNS observed | No — no responses exceeded UDP limit |
+| Transport protocol | UDP port 53 — all my queries fit within UDP |
+| TCP DNS observed | No — no responses were large enough to trigger TCP fallback |
 | Average query size | ~60–80 bytes |
-| Average response size | ~80–150 bytes (varies by record type) |
+| Average response size | ~80–150 bytes depending on record type |
 
-### DNS Record Types Captured
+### DNS Record Types I Captured
 
-| Record Type | Query | Answer | TTL |
+| Record Type | Query I Made | Answer Received | TTL |
 |---|---|---|---|
 | A | google.com | 142.251.142.142 | 64s |
 | AAAA | google.com | 2a00:1450:4003:805::200e | 64s |
 | MX | gmail.com | smtp.google.com (priority 17) | 64s |
 | NS | google.com | ns1.google.com | 64s |
-| PTR | 8.in-addr.arpa | dns.google | 64s |
+| PTR | 8.8.8.8 | dns.google | 64s |
 
 ### Transaction ID Matching
 
-Every DNS query carries a **Transaction ID** (`0x8ef1`). The DNS server echoes the same ID back in its response so the client can match answers to questions. Observed in capture: all Transaction IDs matched correctly between query and response — indicating normal, non-spoofed DNS traffic.
+I expanded the DNS layer on several query/response pairs and confirmed that the Transaction ID (`0x8ef1` in one example) was identical between the query and its matching response. This is how the client matches answers to the right question when multiple queries are in flight at once. All Transaction IDs in my capture matched correctly — no spoofing indicators.
 
-### NXDOMAIN Observation
+### NXDOMAIN — What I Saw
 
-Querying `thisisafakedomain12345xyz.com` returned **RCODE 3 (NXDOMAIN)** — Non-Existent Domain. The response contained no answer section, only the question section and the error code in the flags field.
+When I queried `thisisafakedomain12345xyz.com`, the response came back with **RCODE 3 (NXDOMAIN)**. The response packet had no answer section at all. just the question echoed back and the error code in the flags field. This is exactly what a malware sample sees hundreds of times per minute when its DGA domains haven't been registered yet.
 
 ---
 
@@ -108,48 +111,50 @@ Querying `thisisafakedomain12345xyz.com` returned **RCODE 3 (NXDOMAIN)** — Non
 
 | Screenshot | Description |
 |---|---|
-| `screenshots/01-dns-filter.png` | Full Wireshark capture with `dns` filter applied |
-| `screenshots/02-dns-query.png` | Single DNS query packet with details expanded |
+| `screenshots/01-dns-filter.png` | Wireshark with `dns` filter — full capture view |
+| `screenshots/02-dns-query.png` | Single DNS query expanded in detail pane |
 | `screenshots/03-dns-response.png` | Matching DNS response with answer section expanded |
-| `screenshots/04-record-types.png` | Multiple record types (A, MX, NS) visible in capture |
-| `screenshots/05-transaction-id.png` | Query and response showing matching Transaction IDs |
-| `screenshots/06-nxdomain.png` | NXDOMAIN response packet — RCODE 3 visible in flags |
+| `screenshots/04-record-types.png` | A, MX and NS records visible in the same capture |
+| `screenshots/05-transaction-id.png` | Query and response side by side — matching Transaction IDs |
+| `screenshots/06-nxdomain.png` | NXDOMAIN response — RCODE 3 visible in flags |
 | `screenshots/07-dns-statistics.png` | Statistics → DNS summary table |
 
 ---
 
-## 💡 Key Observations
+## 💡 What I Learned
 
-- **TTL values vary significantly by record type** — A records have short TTLs (300s) because IPs change more often; NS records have long TTLs (21600s+) because nameservers rarely change. Attackers using fast-flux DNS set very low TTLs (0–60s) to rapidly rotate IPs.
+- **TTL values tell you about the infrastructure** — I noticed all my responses came back with short TTLs around 64 seconds, which is Google's current setting. I now know that legitimate CDN infrastructure often has short TTLs, and that attackers using fast-flux DNS deliberately set TTLs near zero to rapidly rotate IPs and make takedowns harder.
 
-- **DNS uses UDP by default** — quick, stateless, no handshake. This makes it easy to spoof (no connection state to verify). TCP is only used when the response payload exceeds 512 bytes (or 4096 bytes with EDNS).
+- **DNS over UDP has no authentication** — because there's no connection state, anyone can send an ARP reply claiming any IP. The only verification mechanism is the Transaction ID, which is only 16 bits — just 65,536 possible values. The Kaminsky attack exploited exactly this by flooding forged responses and racing to guess the right ID before the real response arrived.
 
-- **Transaction IDs are only 16 bits** — meaning only 65,536 possible values. DNS cache poisoning attacks (Kaminsky attack) exploit this by flooding forged responses and guessing the Transaction ID.
+- **NXDOMAIN looks completely ordinary at the packet level** — the response is almost identical to a successful response except the answer section is empty and the RCODE field reads 3 instead of 0. A single NXDOMAIN is nothing. Hundreds per minute from one host is a DGA alarm.
 
-- **NXDOMAIN flood = SOC red flag** — a single host generating hundreds of NXDOMAIN responses per minute typically indicates malware using a Domain Generation Algorithm (DGA) trying to reach its C2 infrastructure.
+- **I didn't see any TCP DNS in my capture** — all my queries fit within UDP. I know TCP kicks in when a response exceeds 512 bytes (or 4096 with EDNS), so in future exercises I want to generate a query that forces TCP fallback — probably a large DNSSEC or TXT response — so I can see what that looks like.
+
+- **DNS is the first thing to check when investigating malware** — before malware can connect to anything it has to resolve a domain. That DNS query is often the earliest visible indicator of compromise in a PCAP, appearing before any actual C2 traffic.
 
 ---
 
 ## 🔗 SOC Relevance
 
-| Pattern | What It Means in a SOC |
+| Pattern I'd Look For | What It Means |
 |---|---|
-| Abnormally long domain names in queries | Possible DNS tunnelling (data exfiltration) |
-| High volume of NXDOMAIN responses | DGA malware looking for active C2 domain |
-| DNS queries to unusual/external resolvers | Bypassing internal DNS — policy violation or malware |
-| TXT record queries in high volume | DNS tunnelling tool (e.g. iodine, dnscat2) |
-| Very low TTL values (0–60s) | Fast-flux DNS — bulletproof hosting / botnet |
-| Duplicate Transaction IDs from different IPs | DNS spoofing attempt |
-| DNS over non-standard ports | Evasion technique — DNS on port 5353, 4444 etc. |
+| Abnormally long or random-looking domain names | Possible DNS tunnelling — data being exfiltrated in queries |
+| High volume of NXDOMAIN responses from one host | DGA malware cycling through dead C2 domains |
+| DNS queries going to non-corporate resolvers | Malware bypassing internal DNS — common evasion technique |
+| High volume of TXT record queries | DNS tunnelling tool in use (e.g. iodine, dnscat2) |
+| Very low TTLs (0–60s) on external domains | Fast-flux DNS — bulletproof hosting or botnet infrastructure |
+| Same Transaction ID in replies from different IPs | DNS spoofing attempt in progress |
+| DNS traffic on non-standard ports | Evasion technique — hiding DNS on ports like 4444 or 5353 |
 
 ---
 
-## 🛠️ Tools Used
+## 🛠️ Tools I Used
 
 - **Wireshark** — packet capture and analysis
 - **nslookup** — DNS query tool (built into Kali)
-- **dig** — detailed DNS query tool (built into Kali)
-- **Kali Linux** — lab environment
+- **dig** — more detailed DNS query tool (built into Kali)
+- **Kali Linux** — my lab environment
 
 ---
 
