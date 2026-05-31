@@ -38,8 +38,8 @@ All captures were performed in isolated lab environments using VirtualBox and co
 | 04 | [Nmap Scan Detection & Analysis](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/Nmap%20Scan%20Detection%20&%20Analysis) | TCP, ICMP | Intermediate | ✅ Complete |
 | 05 | [ARP Spoofing / MITM Detection](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/ARP%20Spoofing%20&%20MITM%20Detection)| ARP | Intermediate | ✅ Complete |
 | 06 | [Malware PCAP Investigation](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/Malware%20PCAP%20Investigation)| HTTP, TCP | Intermediate | ✅ Complete|
-| 07 | [SSH Brute Force Detection](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/SSH%20Brute%20Force%20Detection)| SSH, TCP | Intermediate | ✅Complete |
-| 08 | [Rogue DHCP Server Detection](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/Rogue%20DHCP%20Server%20Detection) | DHCP, UDP | Advanced | ⏳Complete |
+| 07 | [SSH Brute Force Detection](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/SSH%20Brute%20Force%20Detection)| SSH, TCP | Intermediate | ✅ Complete |
+| 08 | [Rogue DHCP Server Detection](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/Rogue%20DHCP%20Server%20Detection) | DHCP, UDP | Advanced | ✅ Complete |
 | 09 | [ICMP Tunnel Detection](#09---icmp-tunnel-detection) | ICMP | Advanced | ⏳ Planned |
 | 10 | [Full PCAP Forensics Investigation](#10---full-pcap-forensics-investigation) | Multi | Advanced | ⏳ Planned |
 
@@ -413,21 +413,6 @@ VirtualBox Host Machine
 ├── Windows Client VM
 └── Isolated Host-Only Network
 ```
-
----
-<!--
-# 📂 Repository Structure
-
-```text
-wireshark-network-analysis/
-├── README.md
-├── captures/
-├── screenshots/
-├── notes/
-├── reports/
-└── iocs/
-```
--->
 ---
 
 # 🧠 Skills Demonstrated
@@ -451,16 +436,6 @@ wireshark-network-analysis/
 * tcpdump
 * tshark
 
----
-<!--
-# 📚 Resources Used
-
-* Wireshark Documentation
-* Malware Traffic Analysis
-* CyberDefenders
-* TryHackMe
-* MITRE ATT&CK Framework
--->
 ---
 
 # 📜 Disclaimer
