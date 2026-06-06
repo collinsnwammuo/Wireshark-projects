@@ -40,7 +40,7 @@ All captures were performed in isolated lab environments using VirtualBox and co
 | 06 | [Malware PCAP Investigation](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/Malware%20PCAP%20Investigation)| HTTP, TCP | Intermediate | ✅ Complete|
 | 07 | [SSH Brute Force Detection](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/SSH%20Brute%20Force%20Detection)| SSH, TCP | Intermediate | ✅ Complete |
 | 08 | [Rogue DHCP Server Detection](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/Rogue%20DHCP%20Server%20Detection) | DHCP, UDP | Advanced | ✅ Complete |
-| 09 | [ICMP Tunnel Detection](#09---icmp-tunnel-detection) | ICMP | Advanced | ⏳ Planned |
+| 09 | [ICMP Tunnel Detection](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/ICMP%20Tunnel%20Detection)| ICMP | Advanced | ✅ Complete |
 | 10 | [Full PCAP Forensics Investigation](#10---full-pcap-forensics-investigation) | Multi | Advanced | ⏳ Planned |
 
 ---
@@ -344,7 +344,7 @@ bootp
 -->
 ---
 
-## 09 - ICMP Tunnel Detection
+## 09 - ICMP Tunnel Detection 👉 [Open](https://github.com/collinsnwammuo/Wireshark-projects/tree/main/ICMP%20Tunnel%20Detection)
 
 ### 🎯 Scenario
 
