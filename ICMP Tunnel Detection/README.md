@@ -3,21 +3,21 @@
 **Difficulty:** Advanced  
 **Protocols:** ICMP, TCP, SSH  
 **Tools:** Wireshark · ptunnel-ng  
-**Lab Environment:** Kali Linux (attacker/analyst) · Windows 10 (target) · VirtualBox NAT + Host-Only
+**Lab Environment:** Kali Linux only · Loopback interface · VirtualBox
 
 ---
 
 ## 🎯 What I Did
 
-I created a covert ICMP tunnel between my Kali Linux VM and Windows 10 VM using ptunnel-ng, tunnelled a live SSH session through it so that real TCP traffic was hidden inside ICMP ping packets, and then captured the whole thing in Wireshark. The analysis focused on identifying the specific indicators that separate malicious ICMP tunnelling from normal legitimate ping traffic -- because from a distance they look identical.
+I set up a complete ICMP tunnel on a single Kali Linux VM -- running both the tunnel server and client on loopback -- and tunnelled a live SSH session through it so that real TCP traffic was hidden inside ICMP ping packets. I captured the entire thing in Wireshark on the loopback interface and then analysed the capture against a normal ping baseline to identify every indicator that distinguishes malicious ICMP tunnelling from legitimate traffic.
 
-This is one of the more advanced evasion techniques in the portfolio. Attackers use ICMP tunnelling specifically to bypass firewalls that allow ping but block other protocols. Understanding what it looks like in a packet capture is something I did not see covered in most beginner SOC resources, which is exactly why I wanted to include it.
+I deliberately chose the single-VM loopback approach because it isolates the ICMP tunnel behaviour cleanly without any additional network noise from a second machine. The detection indicators are identical to a real network scenario and the capture is easier to read and analyse.
 
 ---
 
 ## ⚠️ Disclaimer
 
-All activity was performed in my isolated VirtualBox lab environment. No external systems or real networks were involved.
+All activity was performed entirely within my Kali Linux VM using the loopback interface. No external systems or real networks were involved.
 
 ---
 
@@ -25,33 +25,55 @@ All activity was performed in my isolated VirtualBox lab environment. No externa
 
 ### Normal ICMP vs ICMP Tunnel
 
-ICMP (Internet Control Message Protocol) is used for network diagnostics. The most common use is ping -- a simple echo request and echo reply to check if a host is reachable.
+ICMP (Internet Control Message Protocol) is used for network diagnostics. The most familiar use is ping -- a simple echo request and echo reply to check if a host is reachable.
 
 ```
-Normal ping:
-Kali --> Windows:  [Echo Request]  Type=8  Payload = 48 bytes of padding
-Windows --> Kali:  [Echo Reply]    Type=0  Payload = 48 bytes of padding
+Normal ping on loopback:
+Kali --> Kali:  [Echo Request]  Type=8  Data = 48 bytes (ASCII padding)
+Kali --> Kali:  [Echo Reply]    Type=0  Data = 48 bytes (same payload echoed)
 
 ICMP Tunnel:
-Kali --> Windows:  [Echo Request]  Type=8  Payload = 1400 bytes of SSH data
-Windows --> Kali:  [Echo Reply]    Type=0  Payload = 1400 bytes of response
+Kali --> Kali:  [Echo Request]  Type=8  Data = 1000+ bytes (SSH session data)
+Kali --> Kali:  [Echo Reply]    Type=0  Data = 1000+ bytes (SSH response data)
 ```
 
-From a firewall's perspective both look like ping. From Wireshark's perspective they are completely different -- but only if you know what to look for.
+From a firewall perspective both look like ping. From Wireshark they are completely different -- but only if you know exactly what to look for.
 
-### Why Attackers Use ICMP Tunnelling
+### Why Attackers Use This
 
-Many network environments block outbound TCP and UDP connections to prevent data exfiltration and C2 communication. But they leave ICMP open because blocking ping breaks network diagnostics and makes operations difficult. Attackers exploit this by hiding TCP sessions, shell access, and file transfers inside ICMP echo packets that sail through the firewall unchallenged.
+Many organisations block outbound TCP and UDP connections to prevent data exfiltration and C2 communication but leave ICMP open because blocking ping breaks network diagnostics and is operationally inconvenient. Attackers exploit this gap by hiding TCP connections, remote shell access, and file transfers inside ICMP echo packets that pass through firewalls unchallenged.
 
-Common uses in real attacks:
-- Full shell access through a firewall that blocks all TCP
-- Data exfiltration in environments where HTTPS is blocked but ping is allowed
-- C2 communication hidden inside what looks like routine network health checks
+Real-world uses include:
+- Remote shell access through a firewall that blocks all TCP outbound
+- Data exfiltration in environments where HTTPS is monitored but ICMP is ignored
+- C2 beaconing disguised as routine network health checks
 - Bypassing network monitoring tools that do not inspect ICMP payload content
 
-### Tools Used for This Attack
+### How ptunnel-ng Works
 
-**ptunnel-ng** is an open source ICMP tunnelling tool that wraps TCP connections inside ICMP echo packets. It runs a server on the destination and a client on the source, creating a transparent TCP-over-ICMP tunnel.
+```
+SSH client connects to localhost:2222
+          |
+          v
+ptunnel-ng CLIENT on Kali
+  -- Takes the TCP connection
+  -- Wraps the data inside ICMP Echo Request packets
+  -- Sends the ICMP packets to the ptunnel-ng server
+          |
+          | (only ICMP visible on the network)
+          v
+ptunnel-ng SERVER on Kali (loopback)
+  -- Receives ICMP packets
+  -- Unwraps the TCP data
+  -- Forwards it to SSH port 22
+          |
+          v
+OpenSSH Server on Kali port 22
+  -- Receives a normal SSH connection
+  -- Has no idea it came through ICMP
+```
+
+Wireshark watching the loopback interface sees only ICMP packets. The SSH session is completely invisible at the network layer.
 
 ---
 
@@ -60,71 +82,49 @@ Common uses in real attacks:
 ### Lab Configuration
 
 ```
-VirtualBox Host-Only Network 192.168.56.0/24:
-  Kali Linux   192.168.56.102   (tunnel client + Wireshark analyst)
-  Windows 10   192.168.56.101   (tunnel server + SSH target)
+Single Kali Linux VM
+  Capture interface: loopback (lo)
+  ptunnel-ng server: 127.0.0.1 (listening for ICMP)
+  ptunnel-ng client: 127.0.0.1 (wrapping TCP in ICMP)
+  SSH server: port 22 (destination for tunnelled traffic)
+  Local tunnel port: 2222 (SSH connects here)
 ```
-
-### The Tunnel Architecture
-
-```
-Kali (local port 1234)
-        |
-        | TCP connection to localhost:1234
-        v
-ptunnel-ng client on Kali
-        |
-        | Wraps TCP data inside ICMP Echo Requests
-        | Sends ICMP packets to Windows
-        v
-ptunnel-ng server on Windows
-        |
-        | Unwraps ICMP, extracts TCP data
-        | Forwards to SSH port 22 on Windows
-        v
-OpenSSH Server on Windows:22
-```
-
-From Wireshark's perspective on the network, only ICMP packets are visible. The SSH session is completely invisible at the network layer.
 
 ### Commands I Ran
 
-**On Windows 10 -- start ptunnel-ng server:**
-```cmd
-ptunnel-ng.exe
-```
+I used three terminals simultaneously:
 
-**On Kali -- start tunnel client:**
+**Terminal 1 -- ptunnel-ng server:**
 ```bash
-sudo ptunnel-ng -p 192.168.56.101 -l 1234 -r 192.168.56.101 -R 22
+sudo ptunnel-ng -S
 ```
 
-**On Kali -- connect SSH through the tunnel:**
+**Terminal 2 -- ptunnel-ng client:**
 ```bash
-ssh henry@127.0.0.1 -p 1234
+sudo ptunnel-ng -p 127.0.0.1 -l 2222 -r 127.0.0.1 -R 22
 ```
 
-- `-p 192.168.56.101` -- ptunnel-ng server address (Windows)
-- `-l 1234` -- local port on Kali to listen on
-- `-r 192.168.56.101` -- remote destination host
-- `-R 22` -- remote port to reach (SSH)
+**Terminal 3 -- SSH through the tunnel:**
+```bash
+ssh kali@127.0.0.1 -p 2222
+```
 
-Connecting to `127.0.0.1:1234` on Kali sent the SSH traffic through ptunnel-ng which wrapped it in ICMP packets and sent it to Windows. The SSH session ran normally -- I could run commands -- but all the traffic appeared as ICMP in Wireshark.
+Connecting to port `2222` sent the SSH traffic into ptunnel-ng which wrapped it in ICMP and sent it to the server on loopback. The SSH session ran normally -- I ran several commands -- but all the traffic appeared as ICMP ping packets in Wireshark.
 
 ### Wireshark Capture Method
 
-- Interface: `eth0`
+- Interface: **Loopback (lo)** -- not eth0
 - Pre-capture filter: `icmp`
-- Saved as: `icmp-tunnel.pcap`
-- Also captured normal ping separately: `icmp-normal.pcap`
+- Baseline capture: `icmp-normal.pcap` (5 pings to 127.0.0.1 before tunnel)
+- Tunnel capture: `icmp-tunnel.pcap` (full SSH session through tunnel)
 
 ### Filters I Used
 
 ```wireshark
 icmp                          # All ICMP traffic
-icmp.type == 8                # Echo Requests only (outbound data)
-icmp.type == 0                # Echo Replies only (inbound responses)
-icmp && data.len > 100        # ICMP with large payloads (tunnel indicator)
+icmp.type == 8                # Echo Requests only -- outbound tunnel data
+icmp.type == 0                # Echo Replies only -- inbound tunnel responses
+icmp && data.len > 100        # Oversized ICMP -- tunnel detection filter
 ```
 
 ---
@@ -133,83 +133,91 @@ icmp && data.len > 100        # ICMP with large payloads (tunnel indicator)
 
 ### Normal Ping vs ICMP Tunnel -- Direct Comparison
 
-| Indicator | Normal Ping | ICMP Tunnel |
+| Indicator | Normal Ping (5 pings) | ICMP Tunnel (SSH session) |
 |---|---|---|
-| Total packets (5 pings) | 10 packets | Hundreds of packets |
-| Payload size | 48 bytes | 1000+ bytes per packet |
+| Total packets | 10 | Hundreds |
+| Payload size per packet | 48 bytes | 500 to 1400+ bytes |
 | Payload content | Repeating ASCII pattern | Binary / encrypted data |
-| Sequence numbers | Sequential (1, 2, 3...) | Non-standard pattern |
-| Duration | Brief burst then silence | Sustained continuous stream |
+| Sequence numbers | Sequential 1, 2, 3... | Non-standard |
+| Duration | 5 seconds | Length of SSH session |
 | Traffic rate | 1 packet per second | Many packets per second |
-| Packet size | ~98 bytes total | 1000+ bytes total |
+| `data.len > 100` matches | 0 | All packets |
 
-Every single indicator pointed in the same direction. The tunnel was not subtle.
+Every indicator pointed the same way. The tunnel was not subtle once I knew what to look for.
 
 ---
 
 ### IOC 1 -- Oversized ICMP Payload
 
-The most obvious indicator was payload size. Expanding an ICMP Echo Request from the tunnel capture in the middle pane:
+The most immediate indicator was payload size. Expanding an Echo Request from the tunnel capture:
 
 ```
 Internet Control Message Protocol
   Type: 8 (Echo Request)
   Code: 0
-  Sequence number: [non-standard]
-  Data (1412 bytes)    <- ICMP tunnel payload
+  Data (1412 bytes)     <- tunnel payload
 ```
 
-Compare this to normal ping:
+Versus a normal ping packet:
 ```
 Internet Control Message Protocol
   Type: 8 (Echo Request)
   Code: 0
-  Sequence number: 1
-  Data (48 bytes)      <- Normal ping payload
+  Data (48 bytes)       <- normal ping payload
 ```
 
-A 1412-byte ICMP payload is not a ping. It is data. Statistics -> Packet Lengths confirmed the abnormal size distribution -- all normal ping packets clustered around 98 bytes while tunnel packets clustered above 1000 bytes.
+A single filter confirmed it:
+```wireshark
+icmp && data.len > 100
+```
+
+Every packet in the tunnel matched. Zero packets from the normal ping matched. That filter alone is sufficient to triage ICMP tunnelling in a live investigation.
 
 ---
 
-### IOC 2 -- Payload Content Not ASCII Pattern
+### IOC 2 -- Binary Payload Content
 
-In the hex dump pane of Wireshark, normal ping payload looks like this:
+Looking at the hex dump pane in Wireshark, the difference was immediately visible.
 
+Normal ping hex dump (right side ASCII column):
 ```
-Normal ping hex dump (right side):
-!"#$%&'()*+,-./0123456789:;<=>?@AB...
+!"#$%&'()*+,-./0123456789:;<=>?   <- predictable repeating characters
 ```
 
-It is a predictable, repeating sequence of printable ASCII characters. The tunnel payload looked completely different -- binary data with no recognisable pattern, confirming that actual TCP session data (SSH packets) was being carried inside the ICMP frames.
+Tunnel hex dump (right side ASCII column):
+```
+.R..p\..^J..v...3..}..k...       <- binary data, no recognisable pattern
+```
+
+No human-readable content, no repeating pattern. The payload contains the encrypted SSH session data wrapped in ICMP.
 
 ---
 
-### IOC 3 -- Volume and Rate
+### IOC 3 -- Sustained High-Volume Traffic
 
-The IO Graph comparison between the two captures told the story immediately. Normal ping: 10 packets over 5 seconds, then silence. ICMP tunnel: sustained stream of hundreds of packets per second for the entire duration of the SSH session. No legitimate ping activity looks like that.
+The IO Graph comparison told the clearest visual story. The normal ping produced 10 tiny spikes over 5 seconds then silence. The tunnel produced a continuous stream of packets for the entire duration of my SSH session. No legitimate ping activity looks like a sustained data stream.
 
 ---
 
-### IOC 4 -- Bidirectional Data in Both Request and Reply
+### IOC 4 -- Large Payloads in Both Directions
 
-In normal ping, the Echo Request carries a small payload and the Echo Reply echoes it back identically. In the tunnel, both the Echo Request (type 8) and the Echo Reply (type 0) carried large, different payloads -- because data was flowing in both directions through the tunnel simultaneously. Filtering separately for type 8 and type 0 and comparing payload sizes confirmed this.
+In normal ping, the Echo Reply simply echoes back the same 48-byte payload. In the tunnel, both Echo Requests (type 8) and Echo Replies (type 0) carried large different payloads -- because data was flowing bidirectionally through the tunnel simultaneously. Filtering separately for each type and comparing payload sizes confirmed this.
 
 ---
 
 ## 💡 What I Learned
 
-- **ICMP tunnelling is genuinely effective as an evasion technique.** Running an SSH session through ICMP and watching Wireshark show only ping traffic was a clear demonstration of why this technique gets used in real attacks. If I were only looking at firewall logs showing ICMP allowed, I would see nothing suspicious. The evidence only appears when you inspect the packet payload.
+- **The loopback approach is cleaner for analysis than a two-machine setup.** There is no background network noise, no ARP traffic, no DHCP -- just the ICMP tunnel traffic I generated. This made the indicators much easier to identify and the screenshots easier to annotate clearly.
 
-- **Payload size is the fastest detection indicator.** The moment I filtered for `icmp && data.len > 100` everything legitimate disappeared and only the tunnel traffic remained. Normal ICMP payloads are small and predictable. Anything over a few hundred bytes should immediately raise questions.
+- **The single most effective detection filter is `icmp && data.len > 100`.** I could triage ICMP tunnelling with that one filter in under 10 seconds. It produces zero false positives against normal ping traffic and catches every tunnel packet. I would add this as a Suricata alert rule on any network I was defending.
 
-- **The hex dump reveals what statistics alone cannot.** Looking at the raw hex of both captures made the difference undeniable. The ASCII repeating pattern in normal ping versus the dense binary data in the tunnel is visually obvious. I will use hex dump inspection in future investigations whenever I suspect covert channels.
+- **Hex dump is a detection tool, not just a curiosity.** Before doing this exercise I had not paid much attention to the Wireshark hex pane beyond confirming packet content. Seeing the contrast between the predictable ASCII ping payload and the dense binary tunnel payload made me understand why analysts inspect raw hex during investigations -- it reveals things that protocol field parsing can miss.
 
-- **IO Graph volume comparison is the quickest triage tool.** If I received an alert about unusual ICMP traffic and opened the PCAP, the IO Graph would be the first thing I looked at. A sustained high-volume ICMP stream from a single host is not diagnostics activity -- it is a tunnel or a flood.
+- **ICMP tunnelling requires no special privileges on the victim side.** The tunnel server runs as root but the technique itself only requires the ability to send and receive ICMP packets. On most networks any host can do this because ICMP is broadly permitted.
 
-- **Firewalls that allow all ICMP are overly permissive.** A more secure configuration would rate-limit ICMP, restrict ICMP to specific trusted hosts, or block ICMP types other than the ones needed for diagnostics (types 0, 3, 8, 11). Allowing unrestricted ICMP leaves the door open to exactly this kind of covert channel.
+- **Firewalls that allow unrestricted ICMP have a significant blind spot.** A policy that says allow all ICMP will never catch this regardless of how sophisticated the rest of the security stack is. Detection requires either a DPI tool inspecting ICMP payload size and content or a dedicated IDS rule.
 
-- **Detection requires payload inspection, not just protocol filtering.** A firewall rule that says "allow ICMP" will never catch this. Detection requires either a deep packet inspection tool that checks ICMP payload size and content against a baseline, or an IDS rule that alerts on ICMP packets above a certain payload threshold.
+- **The IO Graph is the fastest triage tool for this attack.** If I received an alert and opened a PCAP to investigate, the IO Graph would tell me within seconds whether I was looking at ping or a tunnel. A sustained high-volume ICMP stream from a single host is not diagnostics -- it is data exfiltration or a C2 channel.
 
 ---
 
@@ -219,53 +227,53 @@ In normal ping, the Echo Request carries a small payload and the Echo Reply echo
 
 | Method | Tool | What It Catches |
 |---|---|---|
-| ICMP payload size monitoring | Suricata / Snort IDS | Packets above normal payload threshold |
-| ICMP rate limiting | Firewall / IDS | Sustained high-volume ICMP from one host |
-| Deep packet inspection | NGFW / IDS | Binary payload content in ICMP frames |
-| Baseline deviation | SIEM / NDR | ICMP volume spike from internal host |
-| Protocol anomaly detection | Zeek / Suricata | ICMP type 8 with non-standard payload |
+| ICMP payload size threshold | Suricata / Snort | Packets above normal payload size |
+| ICMP rate monitoring | Firewall / SIEM | Sustained high-volume ICMP from one host |
+| Deep packet inspection | NGFW | Binary content in ICMP payload |
+| Volume baseline deviation | NDR / SIEM | ICMP spike from internal workstation |
+| Protocol anomaly detection | Zeek | Non-standard ICMP payload patterns |
 
-### Suricata Rule to Detect This
+### Suricata Detection Rule
 
 ```
 alert icmp any any -> any any (
-  msg:"Possible ICMP Tunnel - Large Payload";
+  msg:"Possible ICMP Tunnel - Oversized Payload";
   dsize:>200;
   itype:8;
+  classtype:policy-violation;
   sid:9000001;
   rev:1;
 )
 ```
 
-This rule fires on any ICMP Echo Request with a payload over 200 bytes -- well above the normal 48-byte ping payload.
+This rule fires on any ICMP Echo Request with a payload over 200 bytes. Normal ping payloads are 48 bytes on Linux and 32 bytes on Windows. Anything above 200 bytes warrants investigation.
 
 ### Alert Triggers
 
 | Indicator | Severity | What I Would Do |
 |---|---|---|
-| ICMP packets over 200 bytes from internal host | High | Inspect payload, identify source host |
-| Sustained ICMP stream from one host | High | Check IO Graph, correlate with other alerts |
-| ICMP payload contains binary/non-ASCII data | Critical | Likely data exfiltration, isolate host |
+| ICMP packets over 200 bytes from internal host | High | Inspect payload, identify source host immediately |
+| Sustained ICMP stream from one workstation | High | Check IO Graph, correlate with other alerts |
+| Binary non-ASCII content in ICMP payload | Critical | Likely data exfiltration or C2 -- isolate host |
 | ICMP traffic during off-hours from workstation | Medium | Investigate -- not normal user behaviour |
-| Two-way large ICMP between internal and external | Critical | Active tunnel, block and investigate |
+| Bidirectional large ICMP between hosts | Critical | Active tunnel -- block and investigate |
 
 ### MITRE ATT&CK Mapping
 
 | Technique | ID | How It Appeared |
 |---|---|---|
-| Protocol Tunnelling | T1572 | TCP/SSH tunnelled inside ICMP |
-| Exfiltration Over Alternative Protocol | T1048 | Data carried in ICMP instead of TCP |
-| Non-Application Layer Protocol | T1095 | ICMP used as C2 transport layer |
+| Protocol Tunnelling | T1572 | TCP/SSH session wrapped inside ICMP |
+| Exfiltration Over Alternative Protocol | T1048.003 | Data carried in ICMP instead of TCP |
+| Non-Application Layer Protocol | T1095 | ICMP used as C2/exfil transport layer |
 
 ---
 
 ## 🛠️ Tools I Used
 
-- **Wireshark** -- packet capture and analysis
+- **Wireshark** -- packet capture and analysis on loopback interface
 - **ptunnel-ng** -- ICMP tunnelling tool
-- **OpenSSH** -- tunnelled protocol (running on Windows 10 from Project 07)
-- **Kali Linux** -- my attacker and analyst workstation
-- **Windows 10** -- tunnel server and SSH target VM
+- **OpenSSH** -- tunnelled protocol (Kali's built-in SSH server)
+- **Kali Linux** -- single VM for both attacker and analyst roles
 
 ---
 
